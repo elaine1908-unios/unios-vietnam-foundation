@@ -17,6 +17,8 @@ export interface UserRow {
   email: string;
   role: UserRole;
   is_active: number;
+  password_hash: string | null;
+  title: string | null;
   created_at: string;
 }
 
@@ -26,6 +28,7 @@ export interface PublicUser {
   email: string;
   role: UserRole;
   is_active: boolean;
+  title: string | null;
   created_at: string;
 }
 
@@ -36,6 +39,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     email: row.email,
     role: row.role,
     is_active: Boolean(row.is_active),
+    title: row.title,
     created_at: row.created_at,
   };
 }

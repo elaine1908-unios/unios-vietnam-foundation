@@ -66,7 +66,7 @@ export function AppLayout() {
           <span className="text-sm text-ink-muted whitespace-nowrap">
             Signed in as <span className="text-ink font-medium">{user?.name ?? "…"}</span>{" "}
             <span className="font-mono text-xs text-ink-faint">
-              ({user?.role === "team_lead" ? "Team Lead" : "Team Member"})
+              ({user?.title || (user?.role === "team_lead" ? "Team Lead" : "Team Member")})
             </span>
           </span>
           <button onClick={() => signOut()} className="text-sm text-ink-muted hover:text-ink whitespace-nowrap">

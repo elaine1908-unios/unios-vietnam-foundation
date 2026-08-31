@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
 
 const SESSION_SECRET: string = (() => {
   const value = process.env.SESSION_SECRET;
@@ -21,17 +22,18 @@ export function verifySession(token: string): string | null {
   }
 }
 
-// Short-lived, separate secret usage from the session token: signs the OAuth
-// state/PKCE verifier we hand to Microsoft and expect back on /callback, so a
-// forged callback request can't be replayed without also forging this.
-export function signOAuthState(payload: { state: string; verifier: string }): string {
-  return jwt.sign(payload, SESSION_SECRET, { expiresIn: "10m" });
+// scrypt with a random salt, stored as "salt:hash" (both hex) in one column —
+// no bcrypt dependency needed, node:crypto already ships this.
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 64);
+  return `${salt.toString("hex")}:${hash.toString("hex")}`;
 }
 
-export function verifyOAuthState(token: string): { state: string; verifier: string } | null {
-  try {
-    return jwt.verify(token, SESSION_SECRET) as { state: string; verifier: string };
-  } catch {
-    return null;
-  }
+export function verifyPassword(password: string, stored: string): boolean {
+  const [saltHex, hashHex] = stored.split(":");
+  if (!saltHex || !hashHex) return false;
+  const hash = Buffer.from(hashHex, "hex");
+  const candidate = scryptSync(password, Buffer.from(saltHex, "hex"), hash.length);
+  return timingSafeEqual(candidate, hash);
 }

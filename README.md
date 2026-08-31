@@ -6,7 +6,7 @@ A Performance Profile is defined **per job title/role** (e.g. "Senior Site Engin
 
 ## Architecture
 
-- **`server/`** — Node.js + Express + TypeScript API, backed by SQLite (Node's built-in `node:sqlite`, no native dependency to compile). Owns auth (Microsoft/Entra ID SSO), role-based permission checks, the audit trail, and PDF generation.
+- **`server/`** — Node.js + Express + TypeScript API, backed by SQLite (Node's built-in `node:sqlite`, no native dependency to compile). Owns auth (manually-created accounts, email + password), role-based permission checks, the audit trail, and PDF generation.
 - **`web/`** — React + TypeScript frontend (Vite, Tailwind, TanStack Query), talking to the API at `/api/*`. Same design system (colors, Mark Pro typeface) as the `po-so-tracker` app, so the two internal tools read as one system.
 - **root `package.json`** — orchestrates both: `npm run build` builds web then server, `npm start` runs the one production process.
 
@@ -17,21 +17,9 @@ In production the Express server also serves the built frontend, so the whole ap
 - **Team Member** — read-only: browse, search, view, download the watermarked Job Profile PDF, and view/download Job Descriptions (not watermarked — those are meant to be shared externally).
 - **Public / logged out** — the one unauthenticated surface: `/careers`, showing only Job Descriptions a Team Lead has flagged **Now Hiring**. See "Public careers page" below.
 
-Whoever signs in first (via Microsoft SSO) is automatically made a Team Lead — same idea as a one-time setup screen, just folded into SSO instead of a separate step. Every account after that starts as Team Member; a Team Lead promotes people from there (User Management screen).
+There's no self-service sign-up — a Team Lead creates every account from the **User Management** screen (name, email, initial password), which is a chicken-and-egg problem for the very first account. See step 1 below for how that one gets bootstrapped.
 
-## 1. Set up Microsoft sign-in (Azure AD / Entra ID)
-
-The app uses your company's existing Microsoft 365 sign-in — team leads and team members log in with their normal Unios account, no separate password to manage.
-
-1. Go to [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations** → **New registration**.
-2. Name it (e.g. "Performance Profiles"), leave the default account type, and set the **Redirect URI** (platform: **Web**) to `{APP_BASE_URL}/api/auth/callback` — e.g. `http://localhost:4000/api/auth/callback` for local dev, or `https://your-deployed-url/api/auth/callback` in production.
-3. From the app's **Overview** page, copy the **Application (client) ID** and **Directory (tenant) ID**.
-4. Go to **Certificates & secrets** → **New client secret**, and copy its **Value** (not the ID — it's only shown once).
-5. Put these into `server/.env` (see below).
-
-No API permissions need to be added beyond the default `openid`/`profile`/`email` — the app only needs to know who signed in, not access anything else in Microsoft 365.
-
-## 2. Configure the server
+## 1. Configure the server
 
 ```bash
 cd server
@@ -40,16 +28,15 @@ cp .env.example .env
 
 Open `.env` and fill in:
 - `SESSION_SECRET` — a long random string (e.g. `openssl rand -hex 32`)
-- `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` — from step 1
-- `APP_BASE_URL` — must match the Redirect URI you registered
+- `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` — creates one Team Lead account the first time the server boots against an empty database. Only read when the `users` table is empty, so it's safe to leave them set (later boots just no-op) or clear them out afterward — your call.
 
 `DB_PATH` defaults to `./data/profiles.db` — a single file created automatically on first run; back it up like any file.
 
-**Trying it out before Azure AD is set up:** set `DEV_LOGIN=true` in `.env`. This adds a "sign in as any name/email, no password" option on the login page — useful for local development, but **must never be set in production** (there's no password check at all).
+Once that first Team Lead account exists, sign in and create every other account (Team Lead or Team Member) from **User Management** — set their name, email, and an initial password there; they can ask a Team Lead to reset it any time.
 
 **Grammar scanning and English translation** need `ANTHROPIC_API_KEY` set (get one at [console.anthropic.com](https://console.anthropic.com), pay-per-use). Both features degrade gracefully without it — the grammar scan just doesn't block saving, and the English view/PDF shows a clear error with the original content instead of crashing. `ANTHROPIC_MODEL` optionally overrides the default (Haiku 4.5).
 
-## 3. Run it
+## 2. Run it
 
 Two terminals for local development:
 
@@ -61,7 +48,7 @@ cd server && npm install && npm run dev      # API on http://localhost:4000
 cd web && npm install && npm run dev         # frontend on http://localhost:5173, proxies /api to the server
 ```
 
-Open `http://localhost:5173`. Sign in with Microsoft (or, with `DEV_LOGIN=true`, the dev login form) — the first account becomes Team Lead automatically.
+Open `http://localhost:5173` and sign in with the `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` you set above.
 
 For a real deployment, build both and run one process from the repo root:
 
@@ -82,7 +69,7 @@ npm start        # serves the API and the built frontend together on $PORT
 
 **Audit trail** — every profile create/update/archive/restore, and every user role change/deactivation, is logged to `audit_log` (who, what, when).
 
-**User Management** (Team Lead only) — promote/demote between Team Lead and Team Member, deactivate/reactivate accounts. A Team Lead can't demote themselves if they're the only one left, and can't deactivate their own account — both guarded server-side.
+**User Management** (Team Lead only) — create accounts (name, email, initial password, role), promote/demote between Team Lead and Team Member, reset anyone's password, deactivate/reactivate accounts. A Team Lead can't demote themselves if they're the only one left, and can't deactivate their own account — both guarded server-side.
 
 **Career Map** — the master list of Unios Vietnam role titles (division → function → rank tier → role name), seeded from `Career Map_Draft.pdf`. Drives the "Job title" dropdown on the Job Profile form: picking a role auto-fills Rank, Division, and Function from the map, or a team lead can fall back to a free-text title for a role not yet listed. Team Leads manage the list itself at **Career Map** in the nav (add/rename/archive) — no code changes or new migration needed for routine additions, only the original seed came from a migration.
 
@@ -115,6 +102,5 @@ The app is a single Node process that needs one thing a typical serverless platf
 
 1. **Create the Railway project** — connect this repo via GitHub, or `railway up` from the repo root with the Railway CLI.
 2. **Attach a Volume**, mounted at `/data`. This is what makes the database survive redeploys.
-3. **Set environment variables**: `SESSION_SECRET`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `APP_BASE_URL` (the Railway-assigned URL, or your custom domain), `DB_PATH=/data/profiles.db`, `NODE_ENV=production`, and `ANTHROPIC_API_KEY` if you want grammar scanning/translation live. Leave `DEV_LOGIN` unset.
-4. **Update the Azure AD app registration's Redirect URI** to match the deployed `APP_BASE_URL` once you know it.
-5. **Deploy.** First sign-in on the live URL bootstraps the first Team Lead automatically.
+3. **Set environment variables**: `SESSION_SECRET`, `DB_PATH=/data/profiles.db`, `NODE_ENV=production`, `INITIAL_ADMIN_NAME`/`INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` (bootstraps the first Team Lead — see above), and `ANTHROPIC_API_KEY` if you want grammar scanning/translation live.
+4. **Deploy.** Sign in with the initial admin credentials on the live URL, then create every other account from User Management.

@@ -6,10 +6,8 @@ import type { User } from "../lib/types";
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  devLoginEnabled: boolean;
-  azureConfigured: boolean;
   refresh: () => Promise<void>;
-  devSignIn: (name: string, email: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -18,8 +16,6 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [devLoginEnabled, setDevLoginEnabled] = useState(false);
-  const [azureConfigured, setAzureConfigured] = useState(true);
 
   async function refresh() {
     try {
@@ -34,18 +30,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
-    api
-      .get<{ azureConfigured: boolean; devLoginEnabled: boolean }>("/auth/config")
-      .then((cfg) => {
-        setAzureConfigured(cfg.azureConfigured);
-        setDevLoginEnabled(cfg.devLoginEnabled);
-      })
-      .catch(() => {});
   }, []);
 
-  async function devSignIn(name: string, email: string) {
+  async function signIn(email: string, password: string) {
     try {
-      const me = await api.post<User>("/auth/dev-login", { name, email });
+      const me = await api.post<User>("/auth/login", { email, password });
       setUser(me);
       return { error: null };
     } catch (err) {
@@ -58,11 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  return (
-    <AuthContext.Provider value={{ user, loading, devLoginEnabled, azureConfigured, refresh, devSignIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, loading, refresh, signIn, signOut }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

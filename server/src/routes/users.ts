@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
+import { hashPassword } from "../auth.js";
+import { newId } from "../ids.js";
 import { requireAuth, requireTeamLead } from "../middleware.js";
 import { logAudit } from "../audit.js";
 import { toPublicUser } from "../types.js";
@@ -12,6 +14,69 @@ usersRouter.use(requireAuth, requireTeamLead);
 usersRouter.get("/", (_req, res) => {
   const rows = db.prepare("SELECT * FROM users ORDER BY name COLLATE NOCASE").all() as unknown as UserRow[];
   res.json(rows.map(toPublicUser));
+});
+
+usersRouter.post("/", (req, res) => {
+  const { name, email, password, role, title } = req.body as {
+    name?: string;
+    email?: string;
+    password?: string;
+    role?: UserRole;
+    title?: string;
+  };
+  if (!name?.trim() || !email?.trim() || !password) {
+    res.status(400).json({ error: "Name, email, and password are required." });
+    return;
+  }
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters." });
+    return;
+  }
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(normalizedEmail);
+  if (existing) {
+    res.status(400).json({ error: "A user with that email already exists." });
+    return;
+  }
+  const finalRole: UserRole = role === "team_lead" ? "team_lead" : "team_member";
+  const id = newId();
+  db.prepare("INSERT INTO users (id, name, email, role, password_hash, title) VALUES (?, ?, ?, ?, ?, ?)").run(
+    id,
+    name.trim(),
+    normalizedEmail,
+    finalRole,
+    hashPassword(password),
+    title?.trim() || null,
+  );
+  logAudit("user", id, "created", req.user!.id);
+  res.status(201).json(toPublicUser(db.prepare("SELECT * FROM users WHERE id = ?").get(id) as unknown as UserRow));
+});
+
+usersRouter.patch("/:id/title", (req, res) => {
+  const { title } = req.body as { title?: string };
+  const target = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as unknown as UserRow | undefined;
+  if (!target) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  db.prepare("UPDATE users SET title = ? WHERE id = ?").run(title?.trim() || null, target.id);
+  res.json(toPublicUser(db.prepare("SELECT * FROM users WHERE id = ?").get(target.id) as unknown as UserRow));
+});
+
+usersRouter.patch("/:id/password", (req, res) => {
+  const { password } = req.body as { password?: string };
+  if (!password || password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters." });
+    return;
+  }
+  const target = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as unknown as UserRow | undefined;
+  if (!target) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(password), target.id);
+  logAudit("user", target.id, "password_reset", req.user!.id);
+  res.json({ ok: true });
 });
 
 usersRouter.patch("/:id/role", (req, res) => {

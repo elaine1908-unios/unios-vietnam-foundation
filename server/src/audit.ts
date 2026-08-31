@@ -1,7 +1,15 @@
 import { db } from "./db.js";
 import { newId } from "./ids.js";
 
-export type AuditAction = "created" | "updated" | "archived" | "restored" | "role_changed" | "deactivated" | "reactivated";
+export type AuditAction =
+  | "created"
+  | "updated"
+  | "archived"
+  | "restored"
+  | "role_changed"
+  | "deactivated"
+  | "reactivated"
+  | "password_reset";
 
 export function logAudit(entityType: string, entityId: string, action: AuditAction, changedBy: string | undefined) {
   db.prepare(

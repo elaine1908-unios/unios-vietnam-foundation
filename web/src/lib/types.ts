@@ -29,6 +29,7 @@ export interface User {
   email: string;
   role: UserRole;
   is_active: boolean;
+  title: string | null;
   created_at: string;
 }
 
