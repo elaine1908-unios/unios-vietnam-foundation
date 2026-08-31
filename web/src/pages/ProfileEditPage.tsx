@@ -84,7 +84,7 @@ const emptyForm: ProfileInput = {
   responsibilities: [],
   requirements: [],
   okrs: [],
-  competencies: [],
+  competencies: SKILL_OPTIONS.map((skill) => ({ skill, level: null, requirement: "" })),
 };
 
 function TextField({
