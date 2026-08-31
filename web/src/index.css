@@ -1,0 +1,49 @@
+@font-face {
+  font-family: "Mark Pro";
+  src: url("/fonts/MarkPro-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Mark Pro";
+  src: url("/fonts/MarkPro-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Mark Pro";
+  src: url("/fonts/MarkPro-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Mark Pro", "Helvetica Neue", Arial, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid #1139f5;
+  outline-offset: 2px;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-md border border-border px-3 py-2 text-sm bg-surface;
+  }
+  .btn-primary {
+    @apply rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply rounded-md border border-border px-4 py-2 text-sm font-medium text-ink hover:bg-surface-2;
+  }
+  .card {
+    @apply rounded-lg border border-border bg-surface p-5;
+  }
+}

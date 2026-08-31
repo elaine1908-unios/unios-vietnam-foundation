@@ -1,0 +1,11 @@
+import type { ReactNode } from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "./AuthProvider";
+
+export function RequireAuth({ children, teamLeadOnly }: { children: ReactNode; teamLeadOnly?: boolean }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (teamLeadOnly && user.role !== "team_lead") return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
