@@ -46,6 +46,17 @@ function buildGrammarFields(form: ProfileInput) {
 }
 
 const LEVELS: CompetencyLevel[] = ["Basic", "Intermediate", "Advanced", "Expert"];
+const SKILL_OPTIONS = [
+  "Communication",
+  "Teamwork",
+  "Technical/Professional",
+  "Adaptability",
+  "Time management",
+  "Problem-solving",
+  "Organising",
+  "Leadership",
+];
+const SKILL_OPTIONS_ID = "competency-skill-options";
 const CUSTOM_OPTION = "__custom__";
 
 function roleOptionLabel(role: CareerMapRole): string {
@@ -81,15 +92,17 @@ function TextField({
   label,
   value,
   onChange,
+  listId,
 }: {
   label: string;
   value: string | null;
   onChange: (v: string) => void;
+  listId?: string;
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="font-medium">{label}</span>
-      <input className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+      <input className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value)} list={listId} />
     </label>
   );
 }
@@ -432,7 +445,12 @@ export function ProfileEditPage() {
         <div className="flex flex-col gap-4">
           {form.competencies.map((c, i) => (
             <div key={i} className="grid grid-cols-3 gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
-              <TextField label="Skill" value={c.skill} onChange={(v) => updateCompetency(i, { skill: v })} />
+              <TextField
+                label="Skill"
+                value={c.skill}
+                onChange={(v) => updateCompetency(i, { skill: v })}
+                listId={SKILL_OPTIONS_ID}
+              />
               <label className="flex flex-col gap-1 text-sm">
                 <span className="font-medium">Level</span>
                 <select
@@ -458,6 +476,11 @@ export function ProfileEditPage() {
           ))}
           {form.competencies.length === 0 && <p className="text-sm text-ink-muted">No rows yet.</p>}
         </div>
+        <datalist id={SKILL_OPTIONS_ID}>
+          {SKILL_OPTIONS.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
       </div>
 
       <div className="flex gap-2">
