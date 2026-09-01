@@ -108,15 +108,17 @@ function TextAreaField({
   label,
   value,
   onChange,
+  rows = 3,
 }: {
   label: string;
   value: string | null;
   onChange: (v: string) => void;
+  rows?: number;
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="font-medium">{label}</span>
-      <textarea className="input" rows={3} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+      <textarea className="input" rows={rows} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
@@ -439,26 +441,13 @@ export function ProfileEditPage() {
             + Add row
           </button>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           {form.competencies.map((c, i) => (
-            <div key={i} className="grid grid-cols-3 gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
-              <div className="flex flex-col gap-1">
-                <TextField label="Skill" value={c.skill} onChange={(v) => updateCompetency(i, { skill: v })} />
-                <select
-                  className="input !w-auto py-1 text-xs text-ink-muted"
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) updateCompetency(i, { skill: e.target.value });
-                  }}
-                >
-                  <option value="">Preset…</option>
-                  {SKILL_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div
+              key={i}
+              className="grid grid-cols-[1fr_120px_2fr_auto] gap-3 items-start border-b border-border pb-2 last:border-0 last:pb-0"
+            >
+              <TextField label="Skill" value={c.skill} onChange={(v) => updateCompetency(i, { skill: v })} />
               <label className="flex flex-col gap-1 text-sm">
                 <span className="font-medium">Level</span>
                 <select
@@ -474,12 +463,19 @@ export function ProfileEditPage() {
                   ))}
                 </select>
               </label>
-              <div className="flex flex-col gap-2">
-                <TextAreaField label="Requirement" value={c.requirement} onChange={(v) => updateCompetency(i, { requirement: v })} />
-                <button className="text-sm text-red-600 self-start" onClick={() => removeCompetency(i)} type="button">
-                  Remove
-                </button>
-              </div>
+              <TextAreaField
+                label="Requirement"
+                value={c.requirement}
+                onChange={(v) => updateCompetency(i, { requirement: v })}
+                rows={1}
+              />
+              <button
+                className="text-sm text-red-600 self-end mb-2"
+                onClick={() => removeCompetency(i)}
+                type="button"
+              >
+                Remove
+              </button>
             </div>
           ))}
           {form.competencies.length === 0 && <p className="text-sm text-ink-muted">No rows yet.</p>}
