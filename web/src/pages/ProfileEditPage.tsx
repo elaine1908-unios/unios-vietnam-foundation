@@ -108,7 +108,7 @@ function TextAreaField({
   label,
   value,
   onChange,
-  rows = 3,
+  rows = 2,
 }: {
   label: string;
   value: string | null;
@@ -300,12 +300,12 @@ export function ProfileEditPage() {
 
   return (
     <div className="max-w-4xl pb-16">
-      <h1 className="font-display font-bold text-xl mb-4">{isNew ? "New job profile" : `Edit: ${form.job_title}`}</h1>
+      <h1 className="font-display font-bold text-xl mb-3">{isNew ? "New job profile" : `Edit: ${form.job_title}`}</h1>
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
       <GrammarIssuesPanel issues={grammarIssues} />
 
-      <div className="card mb-6 grid grid-cols-2 gap-4">
+      <div className="card !p-4 mb-4 grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Job title</span>
           {useCustomTitle ? (
@@ -355,16 +355,16 @@ export function ProfileEditPage() {
         />
       </div>
 
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="card !p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="font-display font-semibold">Key responsibilities</h2>
           <button className="btn-secondary" onClick={addResponsibility} type="button">
             + Add row
           </button>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           {form.responsibilities.map((r, i) => (
-            <div key={i} className="grid grid-cols-3 gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
+            <div key={i} className="grid grid-cols-3 gap-2 border-b border-border pb-2 last:border-0 last:pb-0">
               <TextAreaField label="Main function" value={r.main_function} onChange={(v) => updateResponsibility(i, { main_function: v })} />
               <TextAreaField label="Responsibilities" value={r.responsibilities} onChange={(v) => updateResponsibility(i, { responsibilities: v })} />
               <div className="flex flex-col gap-2">
@@ -379,8 +379,8 @@ export function ProfileEditPage() {
         </div>
       </div>
 
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="card !p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="font-display font-semibold">Essential requirements</h2>
           <button className="btn-secondary" onClick={addRequirement} type="button">
             + Add row
@@ -404,16 +404,16 @@ export function ProfileEditPage() {
         </div>
       </div>
 
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="card !p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="font-display font-semibold">OKRs</h2>
           <button className="btn-secondary" onClick={addOkr} type="button">
             + Add row
           </button>
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
           {form.okrs.map((o, i) => (
-            <div key={i} className="grid grid-cols-2 gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
+            <div key={i} className="grid grid-cols-2 gap-2 border-b border-border pb-2 last:border-0 last:pb-0">
               <TextAreaField label="Objective" value={o.objective} onChange={(v) => updateOkr(i, { objective: v })} />
               <div className="flex flex-col gap-2">
                 <TextAreaField label="Key results" value={o.key_results} onChange={(v) => updateOkr(i, { key_results: v })} />
@@ -427,25 +427,25 @@ export function ProfileEditPage() {
         </div>
       </div>
 
-      <div className="card mb-6 grid grid-cols-1 gap-4">
+      <div className="card !p-4 mb-4 grid grid-cols-1 gap-3">
         <h2 className="font-display font-semibold">Compensation &amp; benefits</h2>
         <TextAreaField label="Compensation" value={form.compensation} onChange={(v) => setForm((f) => ({ ...f, compensation: v }))} />
         <TextAreaField label="Benefits" value={form.benefits} onChange={(v) => setForm((f) => ({ ...f, benefits: v }))} />
         <TextAreaField label="Bonuses & dependencies" value={form.bonuses} onChange={(v) => setForm((f) => ({ ...f, bonuses: v }))} />
       </div>
 
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="card !p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="font-display font-semibold">Competencies</h2>
           <button className="btn-secondary" onClick={addCompetency} type="button">
             + Add row
           </button>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {form.competencies.map((c, i) => (
             <div
               key={i}
-              className="grid grid-cols-[1fr_120px_2fr_auto] gap-3 items-start border-b border-border pb-2 last:border-0 last:pb-0"
+              className="grid grid-cols-[1fr_120px_2fr_auto] gap-2 items-start border-b border-border pb-1.5 last:border-0 last:pb-0"
             >
               <TextField label="Skill" value={c.skill} onChange={(v) => updateCompetency(i, { skill: v })} />
               <label className="flex flex-col gap-1 text-sm">
