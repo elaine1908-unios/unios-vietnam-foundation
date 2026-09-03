@@ -386,7 +386,9 @@ export function ProfileDetailPage() {
                 <tr key={i} className="border-b border-border last:border-0 align-top">
                   <td className="px-3 py-2">{c.skill}</td>
                   <td className="px-3 py-2">{c.level || "—"}</td>
-                  <td className="px-3 py-2 whitespace-pre-wrap">{c.requirement || "—"}</td>
+                  <td className="px-3 py-2">
+                    <MultilineText text={c.requirement ?? ""} />
+                  </td>
                 </tr>
               ))}
             </tbody>
