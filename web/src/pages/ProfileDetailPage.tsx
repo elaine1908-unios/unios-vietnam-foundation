@@ -107,6 +107,30 @@ function CareerMapLink({ profile }: { profile: ProfileDetail }) {
   );
 }
 
+// Mirrors web/src/components/JobDescriptionBody.tsx's splitLines — a Team
+// Lead sometimes types multiple lines (or their own "- " bullets) into one
+// free-text field; render each as its own bullet instead of one run-on
+// block of pre-wrapped text with no visual separation between lines.
+function splitLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*[-*•·‣]\s+/, "").trim())
+    .filter((line) => line.length > 0);
+}
+
+function MultilineText({ text }: { text: string }) {
+  const lines = splitLines(text);
+  if (lines.length === 0) return <>—</>;
+  if (lines.length === 1) return <>{lines[0]}</>;
+  return (
+    <ul className="list-disc list-inside flex flex-col gap-1">
+      {lines.map((line, i) => (
+        <li key={i}>{line}</li>
+      ))}
+    </ul>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-6">
@@ -285,9 +309,15 @@ export function ProfileDetailPage() {
             <tbody>
               {content.responsibilities.map((r, i) => (
                 <tr key={i} className="border-b border-border last:border-0 align-top">
-                  <td className="px-3 py-2 whitespace-pre-wrap">{r.main_function}</td>
-                  <td className="px-3 py-2 whitespace-pre-wrap">{r.responsibilities}</td>
-                  <td className="px-3 py-2 whitespace-pre-wrap">{r.success_criteria || "—"}</td>
+                  <td className="px-3 py-2">
+                    <MultilineText text={r.main_function} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <MultilineText text={r.responsibilities} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <MultilineText text={r.success_criteria ?? ""} />
+                  </td>
                 </tr>
               ))}
             </tbody>
