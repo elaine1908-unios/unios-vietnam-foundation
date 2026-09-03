@@ -230,6 +230,16 @@ function Bullet({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Mirrors web/src/components/JobDescriptionBody.tsx's splitLines — Team
+// Leads sometimes type multiple lines (or their own "- " bullets) into one
+// free-text field; render each as its own bullet instead of one run-on line.
+function splitLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*[-*•·‣]\s+/, "").trim())
+    .filter((line) => line.length > 0);
+}
+
 export function JobDescriptionDocument({ jd, lang = "vi" }: { jd: JobDescriptionForPdf; lang?: JdLang }) {
   const c = COPY[lang];
   return (
@@ -273,12 +283,24 @@ export function JobDescriptionDocument({ jd, lang = "vi" }: { jd: JobDescription
           <Text>{c.pending}</Text>
         ) : (
           <View>
-            {jd.responsibilities.map((r, i) => (
-              <Bullet key={i}>
-                <Text style={{ fontFamily: "Mark Pro", fontWeight: "bold" }}>{r.main_function}: </Text>
-                {r.responsibilities}
-              </Bullet>
-            ))}
+            {jd.responsibilities.map((r, i) => {
+              const lines = splitLines(r.responsibilities);
+              return (
+                <View key={i}>
+                  <Bullet>
+                    <Text style={{ fontFamily: "Mark Pro", fontWeight: "bold" }}>{r.main_function}:</Text>
+                    {lines.length <= 1 ? ` ${r.responsibilities}` : ""}
+                  </Bullet>
+                  {lines.length > 1 &&
+                    lines.map((line, j) => (
+                      <View key={j} style={[styles.bulletRow, { marginLeft: 14 }]}>
+                        <Text style={[styles.bulletMark, { color: BRAND.inkMuted }]}>•</Text>
+                        <Text style={styles.bulletText}>{line}</Text>
+                      </View>
+                    ))}
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -310,7 +332,21 @@ export function JobDescriptionDocument({ jd, lang = "vi" }: { jd: JobDescription
               <View style={i === jd.competencies.length - 1 ? styles.rowLast : styles.row} key={i} wrap={false}>
                 <Text style={[styles.td, { width: "30%" }]}>{comp.skill}</Text>
                 <Text style={[styles.td, { width: "20%" }]}>{comp.level || c.dash}</Text>
-                <Text style={[styles.tdLast, { width: "50%" }]}>{comp.requirement || c.dash}</Text>
+                <View style={[styles.tdLast, { width: "50%" }]}>
+                  {(() => {
+                    const lines = splitLines(comp.requirement || "");
+                    if (lines.length <= 1) return <Text>{lines[0] ?? c.dash}</Text>;
+                    return (
+                      <>
+                        {lines.map((line, j) => (
+                          <Text key={j} style={j < lines.length - 1 ? { marginBottom: 3 } : undefined}>
+                            • {line}
+                          </Text>
+                        ))}
+                      </>
+                    );
+                  })()}
+                </View>
               </View>
             ))
           )}

@@ -2,6 +2,37 @@ import { JD_COPY } from "../lib/jobDescriptionContent";
 import type { JdLang } from "../lib/jobDescriptionContent";
 import type { JdCompetency, JdRequirement, JdResponsibility } from "../lib/types";
 
+// Team Leads sometimes type multiple lines (or their own "- " bullets) into
+// a single free-text field on the Job Profile form. Rendered as one flat
+// run-on line that reads badly to a candidate, so: split on newlines, strip
+// any leading bullet marker per line, and render as a real bulleted list
+// whenever there's more than one line — a single line still renders plain.
+function splitLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*[-*•·‣]\s+/, "").trim())
+    .filter((line) => line.length > 0);
+}
+
+function MultilineText({
+  text,
+  listClassName = "list-disc list-inside pl-5 mt-1 flex flex-col gap-1",
+}: {
+  text: string;
+  listClassName?: string;
+}) {
+  const lines = splitLines(text);
+  if (lines.length === 0) return null;
+  if (lines.length === 1) return <>{lines[0]}</>;
+  return (
+    <ul className={listClassName}>
+      {lines.map((line, i) => (
+        <li key={i}>{line}</li>
+      ))}
+    </ul>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-6">
@@ -62,7 +93,8 @@ export function JobDescriptionBody({ lang, content }: { lang: JdLang; content: J
           <ul className="text-sm px-3 py-2 list-disc list-inside flex flex-col gap-2">
             {content.responsibilities.map((r, i) => (
               <li key={i}>
-                <span className="font-medium">{r.main_function}:</span> {r.responsibilities}
+                <span className="font-medium">{r.main_function}:</span>{" "}
+                <MultilineText text={r.responsibilities} listClassName="list-[circle] list-inside pl-5 mt-1 flex flex-col gap-1" />
               </li>
             ))}
           </ul>
@@ -101,7 +133,7 @@ export function JobDescriptionBody({ lang, content }: { lang: JdLang; content: J
                 <tr key={i} className="border-b border-border last:border-0 align-top">
                   <td className="px-3 py-2">{comp.skill}</td>
                   <td className="px-3 py-2">{comp.level || "—"}</td>
-                  <td className="px-3 py-2 whitespace-pre-wrap">{comp.requirement || "—"}</td>
+                  <td className="px-3 py-2">{comp.requirement ? <MultilineText text={comp.requirement} /> : "—"}</td>
                 </tr>
               ))}
             </tbody>
