@@ -442,42 +442,54 @@ export function ProfileEditPage() {
           </button>
         </div>
         <div className="flex flex-col gap-1.5">
-          {form.competencies.map((c, i) => (
-            <div
-              key={i}
-              className="grid grid-cols-[1fr_120px_2fr_auto] gap-2 items-start border-b border-border pb-1.5 last:border-0 last:pb-0"
-            >
-              <TextField label="Skill" value={c.skill} onChange={(v) => updateCompetency(i, { skill: v })} />
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium">Level</span>
-                <select
-                  className="input"
-                  value={c.level ?? ""}
-                  onChange={(e) => updateCompetency(i, { level: (e.target.value || null) as CompetencyLevel | null })}
-                >
-                  <option value="">—</option>
-                  {LEVELS.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <TextAreaField
-                label="Requirement"
-                value={c.requirement}
-                onChange={(v) => updateCompetency(i, { requirement: v })}
-                rows={1}
-              />
-              <button
-                className="text-sm text-red-600 self-end mb-2"
-                onClick={() => removeCompetency(i)}
-                type="button"
+          {form.competencies.map((c, i) => {
+            const isFixed = SKILL_OPTIONS.includes(c.skill);
+            return (
+              <div
+                key={i}
+                className="grid grid-cols-[1fr_120px_2fr_auto] gap-2 items-start border-b border-border pb-1.5 last:border-0 last:pb-0"
               >
-                Remove
-              </button>
-            </div>
-          ))}
+                {isFixed ? (
+                  <div className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium">Skill</span>
+                    <p className="input bg-surface-2 text-ink-muted">{c.skill}</p>
+                  </div>
+                ) : (
+                  <TextField label="Skill" value={c.skill} onChange={(v) => updateCompetency(i, { skill: v })} />
+                )}
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium">Level</span>
+                  <select
+                    className="input"
+                    value={c.level ?? ""}
+                    onChange={(e) => updateCompetency(i, { level: (e.target.value || null) as CompetencyLevel | null })}
+                  >
+                    <option value="">—</option>
+                    {LEVELS.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <TextAreaField
+                  label="Requirement"
+                  value={c.requirement}
+                  onChange={(v) => updateCompetency(i, { requirement: v })}
+                  rows={1}
+                />
+                {!isFixed && (
+                  <button
+                    className="text-sm text-red-600 self-end mb-2"
+                    onClick={() => removeCompetency(i)}
+                    type="button"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            );
+          })}
           {form.competencies.length === 0 && <p className="text-sm text-ink-muted">No rows yet.</p>}
         </div>
       </div>
