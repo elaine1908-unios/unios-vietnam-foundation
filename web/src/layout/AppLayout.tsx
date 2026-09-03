@@ -15,7 +15,7 @@ export function AppLayout() {
       <aside className="w-60 shrink-0 border-r border-border px-5 py-7 hidden sm:flex sm:flex-col">
         <div>
           <UniosLogo className="h-8 text-accent-2 mb-[3px]" />
-          <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint">Unios Career and Foundations</p>
+          <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint">Career and Foundations</p>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
           <NavLink to="/" end className={navLinkClass}>

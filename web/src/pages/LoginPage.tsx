@@ -37,7 +37,7 @@ export function LoginPage() {
       <div className="card w-full max-w-sm">
         <UniosLogo className="h-8 text-accent-2 mb-[3px]" />
         <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint mb-4">
-          Unios Career and Foundations
+          Career and Foundations
         </p>
         <p className="text-sm text-ink-muted mb-6">Career Portal - for Unios Vietnam team only</p>
 
@@ -63,7 +63,9 @@ export function LoginPage() {
             {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
-        <p className="text-xs text-ink-faint mt-4">Don't have an account? Ask an Owner to create one for you.</p>
+        <p className="text-xs text-ink-faint mt-4">
+          Don't have an account? Ask your head of department to create one for you.
+        </p>
       </div>
     </div>
   );
