@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../db.js";
-import { signSession, verifyPassword, hashPassword } from "../auth.js";
+import { signSession, verifyPassword, hashPassword, isLegacyScryptHash, verifyLegacyScryptPassword } from "../auth.js";
 import { newId } from "../ids.js";
 import { requireAuth } from "../middleware.js";
 import { logAudit } from "../audit.js";
@@ -68,7 +68,21 @@ authRouter.post("/login", (req, res) => {
   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(String(email).trim().toLowerCase()) as
     | UserRow
     | undefined;
-  if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
+  if (!user || !user.password_hash) {
+    res.status(401).json({ error: "Incorrect email or password." });
+    return;
+  }
+  let ok = verifyPassword(password, user.password_hash);
+  if (!ok && isLegacyScryptHash(user.password_hash) && verifyLegacyScryptPassword(password, user.password_hash)) {
+    // Correct password, just hashed with the algorithm this app used
+    // before switching to bcrypt — silently re-hash so this only ever
+    // happens once per account.
+    const rehashed = hashPassword(password);
+    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(rehashed, user.id);
+    user.password_hash = rehashed;
+    ok = true;
+  }
+  if (!ok) {
     res.status(401).json({ error: "Incorrect email or password." });
     return;
   }
