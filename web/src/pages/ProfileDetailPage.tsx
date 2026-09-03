@@ -183,7 +183,8 @@ export function ProfileDetailPage() {
     queryClient.setQueryData(["profile-translation", id], fresh);
   }
 
-  const isTeamLead = user?.role === "team_lead";
+  const canEdit = user?.capabilities.includes("profile.edit") ?? false;
+  const canArchive = user?.capabilities.includes("profile.archive") ?? false;
   // Only actually "showing English" once a translation has come back —
   // otherwise (still loading, or the API errored, e.g. no ANTHROPIC_API_KEY
   // configured) fall back to the original content rather than silently
@@ -264,12 +265,12 @@ export function ProfileDetailPage() {
           <button className="btn-secondary" onClick={handleDownload} disabled={downloading || (showingEnglish && translating)}>
             {downloading ? "Preparing…" : "Download PDF"}
           </button>
-          {isTeamLead && (
+          {canEdit && (
             <button className="btn-secondary" onClick={() => navigate(`/profiles/${profile.id}/edit`)}>
               Edit
             </button>
           )}
-          {isTeamLead && (
+          {canArchive && (
             <button className="btn-secondary" onClick={handleArchiveToggle} disabled={archiving}>
               {profile.is_archived ? "Restore" : "Archive"}
             </button>

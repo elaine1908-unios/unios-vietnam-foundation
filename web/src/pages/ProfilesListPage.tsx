@@ -67,7 +67,7 @@ export function ProfilesListPage() {
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-4 gap-3">
         <h1 className="font-display font-bold text-xl">Job Profiles</h1>
-        {user?.role === "team_lead" && (
+        {user?.capabilities.includes("profile.create") && (
           <Link to="/profiles/new" className="btn-primary">
             New profile
           </Link>
@@ -97,7 +97,7 @@ export function ProfilesListPage() {
             </option>
           ))}
         </select>
-        {user?.role === "team_lead" && (
+        {user?.capabilities.includes("profile.create") && (
           <label className="flex items-center gap-2 text-sm text-ink-muted whitespace-nowrap">
             <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
             Include archived

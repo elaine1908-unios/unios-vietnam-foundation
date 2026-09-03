@@ -3,8 +3,8 @@ import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { db } from "../db.js";
 import { newId } from "../ids.js";
-import { requireAuth, requireTeamLead } from "../middleware.js";
-import { logAudit } from "../audit.js";
+import { requireCap } from "../middleware.js";
+import { logAudit, diffAndLog } from "../audit.js";
 import { JobDescriptionDocument } from "../pdf/JobDescriptionDocument.js";
 import type { JobDescriptionForPdf, JdLang } from "../pdf/JobDescriptionDocument.js";
 import { getOrCreateTranslation } from "../translation.js";
@@ -12,7 +12,9 @@ import type { ProfileForTranslation } from "../translation.js";
 
 export const jobDescriptionsRouter = Router();
 
-jobDescriptionsRouter.use(requireAuth);
+// Job Descriptions aren't part of the original career-map/profiles spec —
+// extended here at the same tier as profiles (see capabilities.ts).
+jobDescriptionsRouter.use(requireCap("jobdescription.view"));
 
 interface JobDescriptionInput {
   job_profile_id?: string;
@@ -158,7 +160,7 @@ jobDescriptionsRouter.get("/:id", (req, res) => {
   res.json(detail);
 });
 
-jobDescriptionsRouter.post("/", requireTeamLead, (req, res) => {
+jobDescriptionsRouter.post("/", requireCap("jobdescription.create"), (req, res) => {
   const input = req.body as JobDescriptionInput;
   const error = validate(input);
   if (error) {
@@ -173,8 +175,10 @@ jobDescriptionsRouter.post("/", requireTeamLead, (req, res) => {
   res.status(201).json(loadDetail(id));
 });
 
-jobDescriptionsRouter.patch("/:id", requireTeamLead, (req, res) => {
-  const existing = db.prepare("SELECT id FROM job_descriptions WHERE id = ?").get(req.params.id);
+jobDescriptionsRouter.patch("/:id", requireCap("jobdescription.edit"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM job_descriptions WHERE id = ?").get(req.params.id) as
+    | Record<string, unknown>
+    | undefined;
   if (!existing) {
     res.status(404).json({ error: "Job Description not found." });
     return;
@@ -188,27 +192,35 @@ jobDescriptionsRouter.patch("/:id", requireTeamLead, (req, res) => {
   db.prepare(
     "UPDATE job_descriptions SET job_profile_id = ?, location = ?, is_now_hiring = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?",
   ).run(input.job_profile_id!.trim(), input.location!.trim(), input.is_now_hiring ? 1 : 0, req.user!.id, req.params.id);
-  logAudit("job_description", req.params.id, "updated", req.user!.id);
+  const updated = db.prepare("SELECT * FROM job_descriptions WHERE id = ?").get(req.params.id) as Record<string, unknown>;
+  diffAndLog(
+    "job_description",
+    req.params.id,
+    { ...existing, is_now_hiring: Boolean(existing.is_now_hiring) },
+    { ...updated, is_now_hiring: Boolean(updated.is_now_hiring) },
+    ["job_profile_id", "location", "is_now_hiring"],
+    req.user!.id,
+  );
   res.json(loadDetail(req.params.id));
 });
 
-jobDescriptionsRouter.post("/:id/archive", requireTeamLead, (req, res) => {
+jobDescriptionsRouter.post("/:id/archive", requireCap("jobdescription.archive"), (req, res) => {
   const result = db.prepare("UPDATE job_descriptions SET is_archived = 1 WHERE id = ?").run(req.params.id);
   if (result.changes === 0) {
     res.status(404).json({ error: "Job Description not found." });
     return;
   }
-  logAudit("job_description", req.params.id, "archived", req.user!.id);
+  logAudit("job_description", req.params.id, "archived", req.user!.id, "is_archived", "false", "true");
   res.json({ ok: true });
 });
 
-jobDescriptionsRouter.post("/:id/restore", requireTeamLead, (req, res) => {
+jobDescriptionsRouter.post("/:id/restore", requireCap("jobdescription.archive"), (req, res) => {
   const result = db.prepare("UPDATE job_descriptions SET is_archived = 0 WHERE id = ?").run(req.params.id);
   if (result.changes === 0) {
     res.status(404).json({ error: "Job Description not found." });
     return;
   }
-  logAudit("job_description", req.params.id, "restored", req.user!.id);
+  logAudit("job_description", req.params.id, "restored", req.user!.id, "is_archived", "true", "false");
   res.json({ ok: true });
 });
 

@@ -1,4 +1,5 @@
-export type UserRole = "team_lead" | "team_member";
+import type { AccessLevel, Capability } from "./capabilities.js";
+import { capabilitiesFor } from "./capabilities.js";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 
@@ -15,10 +16,14 @@ export interface UserRow {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
-  is_active: number;
-  password_hash: string | null;
+  // `role`/`title` are legacy columns, superseded by access_level — kept in
+  // the row shape only because SELECT * still returns them; not read.
+  role: string;
   title: string | null;
+  access_level: AccessLevel;
+  is_active: number;
+  must_change_password: number;
+  password_hash: string | null;
   created_at: string;
 }
 
@@ -26,10 +31,15 @@ export interface PublicUser {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
+  access_level: AccessLevel;
   is_active: boolean;
-  title: string | null;
+  must_change_password: boolean;
   created_at: string;
+  // The effective capability list for this user's access_level — computed
+  // here, once, server-side. The client drives navigation off this instead
+  // of keeping its own copy of the access-level -> capability table, so the
+  // two can never silently drift apart.
+  capabilities: Capability[];
 }
 
 export function toPublicUser(row: UserRow): PublicUser {
@@ -37,10 +47,11 @@ export function toPublicUser(row: UserRow): PublicUser {
     id: row.id,
     name: row.name,
     email: row.email,
-    role: row.role,
+    access_level: row.access_level,
     is_active: Boolean(row.is_active),
-    title: row.title,
+    must_change_password: Boolean(row.must_change_password),
     created_at: row.created_at,
+    capabilities: capabilitiesFor(row.access_level),
   };
 }
 

@@ -1,14 +1,16 @@
 import { Router } from "express";
 import { db, transaction } from "../db.js";
 import { newId } from "../ids.js";
-import { requireAuth, requireTeamLead } from "../middleware.js";
-import { logAudit } from "../audit.js";
+import { requireCap } from "../middleware.js";
+import { logAudit, diffAndLog } from "../audit.js";
 import { getOrCreateTranslation } from "../translation.js";
 import type { ProfileForTranslation } from "../translation.js";
 
 export const profilesRouter = Router();
 
-profilesRouter.use(requireAuth);
+// Baseline for every route in this router, read and write alike — the
+// mutating routes below layer a stricter requireCap on top.
+profilesRouter.use(requireCap("profile.view"));
 
 interface ResponsibilityInput {
   main_function: string;
@@ -164,7 +166,7 @@ profilesRouter.get("/:id", (req, res) => {
   res.json(profile);
 });
 
-profilesRouter.post("/", requireTeamLead, (req, res) => {
+profilesRouter.post("/", requireCap("profile.create"), (req, res) => {
   const input = req.body as ProfileInput;
   const error = validate(input);
   if (error) {
@@ -203,8 +205,10 @@ profilesRouter.post("/", requireTeamLead, (req, res) => {
   res.status(201).json(loadProfile(id));
 });
 
-profilesRouter.patch("/:id", requireTeamLead, (req, res) => {
-  const existing = db.prepare("SELECT id FROM job_profiles WHERE id = ?").get(req.params.id);
+profilesRouter.patch("/:id", requireCap("profile.edit"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM job_profiles WHERE id = ?").get(req.params.id) as
+    | Record<string, unknown>
+    | undefined;
   if (!existing) {
     res.status(404).json({ error: "Profile not found." });
     return;
@@ -220,6 +224,12 @@ profilesRouter.patch("/:id", requireTeamLead, (req, res) => {
     res.status(400).json({ error: "That Career Map role no longer exists." });
     return;
   }
+  const existingChildren = {
+    responsibilities: JSON.stringify(db.prepare("SELECT main_function, responsibilities, success_criteria FROM profile_responsibilities WHERE job_profile_id = ? ORDER BY sort_order").all(req.params.id)),
+    requirements: JSON.stringify(db.prepare("SELECT requirement FROM profile_requirements WHERE job_profile_id = ? ORDER BY sort_order").all(req.params.id)),
+    okrs: JSON.stringify(db.prepare("SELECT objective, key_results FROM profile_okrs WHERE job_profile_id = ? ORDER BY sort_order").all(req.params.id)),
+    competencies: JSON.stringify(db.prepare("SELECT skill, level, requirement FROM profile_competencies WHERE job_profile_id = ? ORDER BY sort_order").all(req.params.id)),
+  };
   const update = transaction(() => {
     db.prepare(
       `UPDATE job_profiles SET job_title = ?, rank = ?, division = ?, function = ?, location = ?, last_updated = ?,
@@ -241,27 +251,52 @@ profilesRouter.patch("/:id", requireTeamLead, (req, res) => {
     writeChildren(req.params.id, input);
   });
   update();
-  logAudit("job_profile", req.params.id, "updated", req.user!.id);
+  const updatedRow = db.prepare("SELECT * FROM job_profiles WHERE id = ?").get(req.params.id) as Record<string, unknown>;
+  diffAndLog(
+    "job_profile",
+    req.params.id,
+    existing,
+    updatedRow,
+    ["job_title", "rank", "division", "function", "location", "last_updated", "compensation", "benefits", "bonuses"],
+    req.user!.id,
+  );
+  // The four child sections are wholesale-replaced arrays, not scalar
+  // fields — logged as a single "section changed" note per section rather
+  // than a structural diff (see audit.ts's diffAndLog comment).
+  const newChildren = {
+    responsibilities: JSON.stringify(input.responsibilities ?? []),
+    requirements: JSON.stringify(input.requirements ?? []),
+    okrs: JSON.stringify(input.okrs ?? []),
+    competencies: JSON.stringify(input.competencies ?? []),
+  };
+  diffAndLog(
+    "job_profile",
+    req.params.id,
+    existingChildren,
+    newChildren,
+    ["responsibilities", "requirements", "okrs", "competencies"],
+    req.user!.id,
+  );
   res.json(loadProfile(req.params.id));
 });
 
-profilesRouter.post("/:id/archive", requireTeamLead, (req, res) => {
+profilesRouter.post("/:id/archive", requireCap("profile.archive"), (req, res) => {
   const result = db.prepare("UPDATE job_profiles SET is_archived = 1 WHERE id = ?").run(req.params.id);
   if (result.changes === 0) {
     res.status(404).json({ error: "Profile not found." });
     return;
   }
-  logAudit("job_profile", req.params.id, "archived", req.user!.id);
+  logAudit("job_profile", req.params.id, "archived", req.user!.id, "is_archived", "false", "true");
   res.json({ ok: true });
 });
 
-profilesRouter.post("/:id/restore", requireTeamLead, (req, res) => {
+profilesRouter.post("/:id/restore", requireCap("profile.archive"), (req, res) => {
   const result = db.prepare("UPDATE job_profiles SET is_archived = 0 WHERE id = ?").run(req.params.id);
   if (result.changes === 0) {
     res.status(404).json({ error: "Profile not found." });
     return;
   }
-  logAudit("job_profile", req.params.id, "restored", req.user!.id);
+  logAudit("job_profile", req.params.id, "restored", req.user!.id, "is_archived", "true", "false");
   res.json({ ok: true });
 });
 
@@ -273,7 +308,8 @@ profilesRouter.get("/:id/audit-log", (req, res) => {
   }
   const rows = db
     .prepare(
-      `SELECT audit_log.id, audit_log.action, audit_log.changed_at, users.name as changed_by_name, users.email as changed_by_email
+      `SELECT audit_log.id, audit_log.action, audit_log.field_name, audit_log.old_value, audit_log.new_value,
+              audit_log.changed_at, users.name as changed_by_name, users.email as changed_by_email
        FROM audit_log LEFT JOIN users ON users.id = audit_log.changed_by
        WHERE audit_log.entity_type = 'job_profile' AND audit_log.entity_id = ?
        ORDER BY audit_log.changed_at DESC`,

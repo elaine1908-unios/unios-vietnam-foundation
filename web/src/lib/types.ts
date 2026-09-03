@@ -1,4 +1,30 @@
-export type UserRole = "team_lead" | "team_member";
+// Mirrors server/src/capabilities.ts (single source of truth for what each
+// level maps to — the client never keeps a copy of that mapping, see the
+// `capabilities` field on User below).
+export const ACCESS_LEVELS = ["team_member", "team_lead", "head_of_department", "owner"] as const;
+export type AccessLevel = (typeof ACCESS_LEVELS)[number];
+
+export const ACCESS_LEVEL_LABELS: Record<AccessLevel, string> = {
+  team_member: "Team Member",
+  team_lead: "Team Lead",
+  head_of_department: "Head of Department",
+  owner: "Owner",
+};
+
+export type Capability =
+  | "profile.view"
+  | "profile.create"
+  | "profile.edit"
+  | "profile.archive"
+  | "careermap.view"
+  | "careerrole.create"
+  | "careerrole.edit"
+  | "careerrole.archive"
+  | "jobdescription.view"
+  | "jobdescription.create"
+  | "jobdescription.edit"
+  | "jobdescription.archive"
+  | "user.admin";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 
@@ -27,10 +53,14 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
+  access_level: AccessLevel;
   is_active: boolean;
-  title: string | null;
+  must_change_password: boolean;
   created_at: string;
+  // Effective capability list for this user's access_level, computed
+  // server-side (see toPublicUser in server/src/types.ts) — drives
+  // navigation and route-gating on the client, with nothing to keep in sync.
+  capabilities: Capability[];
 }
 
 export interface ProfileSummary {
@@ -47,7 +77,12 @@ export interface ProfileSummary {
 
 export interface AuditLogEntry {
   id: string;
+  entity_type?: string;
+  entity_id?: string;
   action: string;
+  field_name: string | null;
+  old_value: string | null;
+  new_value: string | null;
   changed_at: string;
   changed_by_name: string | null;
   changed_by_email: string | null;

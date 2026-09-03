@@ -1,11 +1,13 @@
 import { Router } from "express";
-import { requireAuth, requireTeamLead } from "../middleware.js";
+import { requireCap } from "../middleware.js";
 import { scanGrammar } from "../anthropic.js";
 import type { TextField } from "../anthropic.js";
 
 export const grammarRouter = Router();
 
-grammarRouter.use(requireAuth, requireTeamLead);
+// Whoever can edit a profile is who triggers a scan during save — gated the
+// same as profile.edit rather than left on plain requireAuth.
+grammarRouter.use(requireCap("profile.edit"));
 
 grammarRouter.post("/scan", async (req, res) => {
   const fields = (req.body?.fields ?? []) as TextField[];

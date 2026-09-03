@@ -25,6 +25,7 @@ export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body ?? {}),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body ?? {}),
+  delete: <T>(path: string) => request<T>("DELETE", path),
 };
 
 // Downloads a PDF via a real navigation-triggered fetch so the session cookie

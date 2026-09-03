@@ -4,10 +4,13 @@ import { AuthProvider } from "./auth/AuthProvider";
 import { RequireAuth } from "./auth/RequireAuth";
 import { AppLayout } from "./layout/AppLayout";
 import { LoginPage } from "./pages/LoginPage";
+import { SetupPage } from "./pages/SetupPage";
+import { AccountPage } from "./pages/AccountPage";
 import { ProfilesListPage } from "./pages/ProfilesListPage";
 import { ProfileDetailPage } from "./pages/ProfileDetailPage";
 import { ProfileEditPage } from "./pages/ProfileEditPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
+import { AuditLogPage } from "./pages/AuditLogPage";
 import { CareerMapPage } from "./pages/CareerMapPage";
 import { JobDescriptionsListPage } from "./pages/JobDescriptionsListPage";
 import { JobDescriptionDetailPage } from "./pages/JobDescriptionDetailPage";
@@ -25,6 +28,7 @@ export function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/setup" element={<SetupPage />} />
             <Route element={<PublicLayout />}>
               <Route path="/careers" element={<PublicCareersListPage />} />
               <Route path="/careers/:id" element={<PublicJobDescriptionPage />} />
@@ -37,10 +41,11 @@ export function App() {
               }
             >
               <Route path="/" element={<ProfilesListPage />} />
+              <Route path="/account" element={<AccountPage />} />
               <Route
                 path="/profiles/new"
                 element={
-                  <RequireAuth teamLeadOnly>
+                  <RequireAuth cap="profile.create">
                     <ProfileEditPage />
                   </RequireAuth>
                 }
@@ -49,7 +54,7 @@ export function App() {
               <Route
                 path="/profiles/:id/edit"
                 element={
-                  <RequireAuth teamLeadOnly>
+                  <RequireAuth cap="profile.edit">
                     <ProfileEditPage />
                   </RequireAuth>
                 }
@@ -57,24 +62,28 @@ export function App() {
               <Route
                 path="/users"
                 element={
-                  <RequireAuth teamLeadOnly>
+                  <RequireAuth cap="user.admin">
                     <UserManagementPage />
                   </RequireAuth>
                 }
               />
               <Route
-                path="/career-map"
+                path="/audit-log"
                 element={
-                  <RequireAuth teamLeadOnly>
-                    <CareerMapPage />
+                  <RequireAuth cap="user.admin">
+                    <AuditLogPage />
                   </RequireAuth>
                 }
               />
+              {/* Viewable by everyone (careermap.view is universal) — the
+                  page itself gates its Add/Edit/Archive controls on
+                  careerrole.* capabilities. */}
+              <Route path="/career-map" element={<CareerMapPage />} />
               <Route path="/job-descriptions" element={<JobDescriptionsListPage />} />
               <Route
                 path="/job-descriptions/new"
                 element={
-                  <RequireAuth teamLeadOnly>
+                  <RequireAuth cap="jobdescription.create">
                     <JobDescriptionEditPage />
                   </RequireAuth>
                 }
@@ -83,7 +92,7 @@ export function App() {
               <Route
                 path="/job-descriptions/:id/edit"
                 element={
-                  <RequireAuth teamLeadOnly>
+                  <RequireAuth cap="jobdescription.edit">
                     <JobDescriptionEditPage />
                   </RequireAuth>
                 }

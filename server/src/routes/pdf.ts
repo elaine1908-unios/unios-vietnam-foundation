@@ -3,7 +3,7 @@ import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { db } from "../db.js";
 import { newId } from "../ids.js";
-import { requireAuth } from "../middleware.js";
+import { requireCap } from "../middleware.js";
 import { ProfileDocument } from "../pdf/ProfileDocument.js";
 import type { ProfileForPdf } from "../pdf/ProfileDocument.js";
 import { getOrCreateTranslation } from "../translation.js";
@@ -11,7 +11,7 @@ import type { ProfileForTranslation } from "../translation.js";
 
 export const pdfRouter = Router();
 
-pdfRouter.use(requireAuth);
+pdfRouter.use(requireCap("profile.view"));
 
 pdfRouter.get("/:id/pdf", async (req, res) => {
   const profile = db.prepare("SELECT * FROM job_profiles WHERE id = ?").get(req.params.id) as

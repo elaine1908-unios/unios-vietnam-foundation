@@ -13,6 +13,9 @@ import { careerMapRouter } from "./routes/careerMap.js";
 import { jobDescriptionsRouter } from "./routes/jobDescriptions.js";
 import { grammarRouter } from "./routes/grammar.js";
 import { publicRouter } from "./routes/public.js";
+import { auditRouter } from "./routes/audit.js";
+import { attachUser } from "./middleware.js";
+import { forcePasswordChangeGate } from "./forcePasswordChangeGate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -20,13 +23,21 @@ const app = express();
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 
+// Order matters: attachUser first so authRouter's own requireAuth-gated
+// routes (GET /me, PATCH /me, POST /me/password) see req.user. authRouter
+// itself sits before the forced-password-change gate, so all of
+// /api/auth/* — sign-in, "read my profile", "set my password" — stays
+// reachable no matter what; every router mounted after the gate does not.
+app.use(attachUser);
 app.use("/api/auth", authRouter);
+app.use(forcePasswordChangeGate);
 app.use("/api/users", usersRouter);
 app.use("/api/profiles", profilesRouter);
 app.use("/api/profiles", pdfRouter);
 app.use("/api/career-map", careerMapRouter);
 app.use("/api/job-descriptions", jobDescriptionsRouter);
 app.use("/api/grammar", grammarRouter);
+app.use("/api/audit-log", auditRouter);
 app.use("/api/public", publicRouter);
 
 // Production: serve the built frontend from the same process/port, so the

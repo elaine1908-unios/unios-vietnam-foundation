@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { groupByDivision } from "../lib/careerMap";
 import type { CareerMapRole, CareerRankKey } from "../lib/types";
 import { CAREER_RANK_LABELS, CAREER_RANK_ORDER } from "../lib/types";
+import { useAuth } from "../auth/AuthProvider";
 
 const emptyDraft = { division: "", function: "", rank: "leadership" as CareerRankKey, role_name: "" };
 
@@ -38,6 +39,10 @@ function compareRoles(a: CareerMapRole, b: CareerMapRole, key: SortKey, dir: "as
 }
 
 export function CareerMapPage() {
+  const { user } = useAuth();
+  const canCreate = user?.capabilities.includes("careerrole.create") ?? false;
+  const canEdit = user?.capabilities.includes("careerrole.edit") ?? false;
+  const canArchive = user?.capabilities.includes("careerrole.archive") ?? false;
   const queryClient = useQueryClient();
   const [includeArchived, setIncludeArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -139,9 +144,11 @@ export function CareerMapPage() {
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Career Map</h1>
-        <button className="btn-primary" onClick={startCreate}>
-          + Add role
-        </button>
+        {canCreate && (
+          <button className="btn-primary" onClick={startCreate}>
+            + Add role
+          </button>
+        )}
       </div>
       <p className="text-sm text-ink-muted mb-4">
         The master list of Unios Vietnam role titles offered when creating a Job Profile. Seeded from the Career Map
@@ -262,7 +269,7 @@ export function CareerMapPage() {
                         </button>
                       </th>
                     ))}
-                    <th className="px-3 py-2 font-medium"></th>
+                    {(canEdit || canArchive) && <th className="px-3 py-2 font-medium"></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -281,14 +288,20 @@ export function CareerMapPage() {
                       <td className="px-3 py-2 text-ink-muted">
                         {r.profile_count ? `${r.profile_count} profile${r.profile_count === 1 ? "" : "s"}` : "—"}
                       </td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <button className="text-sm text-accent hover:underline mr-3" onClick={() => startEdit(r)}>
-                          Edit
-                        </button>
-                        <button className="text-sm text-red-600 hover:underline" onClick={() => toggleArchive(r)}>
-                          {r.is_archived ? "Restore" : "Archive"}
-                        </button>
-                      </td>
+                      {(canEdit || canArchive) && (
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          {canEdit && (
+                            <button className="text-sm text-accent hover:underline mr-3" onClick={() => startEdit(r)}>
+                              Edit
+                            </button>
+                          )}
+                          {canArchive && (
+                            <button className="text-sm text-red-600 hover:underline" onClick={() => toggleArchive(r)}>
+                              {r.is_archived ? "Restore" : "Archive"}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

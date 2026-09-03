@@ -1,35 +1,45 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { api, ApiError } from "../lib/api";
 import { useAuth } from "../auth/AuthProvider";
 import { UniosLogo } from "../components/UniosLogo";
-import { api } from "../lib/api";
 
-export function LoginPage() {
-  const { user, loading, signIn } = useAuth();
+// First-run only. Reachable at /setup, but only does anything while the
+// users table is empty — server/src/routes/auth.ts's POST /setup refuses
+// once any account exists, and this page checks the same status up front so
+// it doesn't dead-end into that error for everyone after the fact.
+export function SetupPage() {
+  const { user, refresh } = useAuth();
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
     api
       .get<{ needsSetup: boolean }>("/auth/setup-status")
       .then((r) => setNeedsSetup(r.needsSetup))
-      .catch(() => {});
+      .catch(() => setNeedsSetup(false));
   }, []);
 
-  if (loading) return null;
   if (user) return <Navigate to="/" replace />;
-  if (needsSetup) return <Navigate to="/setup" replace />;
+  if (needsSetup === null) return null;
+  if (needsSetup === false) return <Navigate to="/login" replace />;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const result = await signIn(email, password);
-    setSubmitting(false);
-    if (result.error) setError(result.error);
+    try {
+      await api.post("/auth/setup", { name, email, password });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -39,9 +49,13 @@ export function LoginPage() {
         <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint mb-4">
           Unios Career and Foundations
         </p>
-        <p className="text-sm text-ink-muted mb-6">Career Portal - for Unios Vietnam team only</p>
+        <p className="font-display font-bold text-lg mb-1">Set up the first account</p>
+        <p className="text-sm text-ink-muted mb-6">
+          This creates the first Owner account. Every other account is created from here afterward.
+        </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+          <input className="input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
           <input
             className="input"
             type="email"
@@ -53,17 +67,16 @@ export function LoginPage() {
           <input
             className="input"
             type="password"
-            placeholder="Password"
+            placeholder="Password (min. 8 characters)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button className="btn-primary mt-2" type="submit" disabled={submitting}>
-            {submitting ? "Signing in…" : "Sign in"}
+            {submitting ? "Creating…" : "Create Owner account"}
           </button>
         </form>
-        <p className="text-xs text-ink-faint mt-4">Don't have an account? Ask an Owner to create one for you.</p>
       </div>
     </div>
   );

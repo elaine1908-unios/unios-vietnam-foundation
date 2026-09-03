@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
+import bcrypt from "bcryptjs";
 
 const SESSION_SECRET: string = (() => {
   const value = process.env.SESSION_SECRET;
@@ -22,18 +22,12 @@ export function verifySession(token: string): string | null {
   }
 }
 
-// scrypt with a random salt, stored as "salt:hash" (both hex) in one column —
-// no bcrypt dependency needed, node:crypto already ships this.
+// bcryptjs (pure JS, no native addon to compile — same reasoning as
+// node:sqlite elsewhere in this app) at cost 10, per spec.
 export function hashPassword(password: string): string {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64);
-  return `${salt.toString("hex")}:${hash.toString("hex")}`;
+  return bcrypt.hashSync(password, 10);
 }
 
 export function verifyPassword(password: string, stored: string): boolean {
-  const [saltHex, hashHex] = stored.split(":");
-  if (!saltHex || !hashHex) return false;
-  const hash = Buffer.from(hashHex, "hex");
-  const candidate = scryptSync(password, Buffer.from(saltHex, "hex"), hash.length);
-  return timingSafeEqual(candidate, hash);
+  return bcrypt.compareSync(password, stored);
 }

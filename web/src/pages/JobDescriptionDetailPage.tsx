@@ -36,7 +36,8 @@ export function JobDescriptionDetailPage() {
   if (isLoading) return <p className="text-sm text-ink-muted">Loading…</p>;
   if (error || !jd) return <p className="text-sm text-red-600">Couldn't load this job description.</p>;
 
-  const isTeamLead = user?.role === "team_lead";
+  const canEdit = user?.capabilities.includes("jobdescription.edit") ?? false;
+  const canArchive = user?.capabilities.includes("jobdescription.archive") ?? false;
   // Only actually "showing English" once a translation has come back —
   // otherwise fall back to the original rather than mislabeling it.
   const showingEnglish = lang === "en" && Boolean(translation);
@@ -124,12 +125,12 @@ export function JobDescriptionDetailPage() {
           <button className="btn-secondary" onClick={handleDownload} disabled={downloading || (showingEnglish && translating)}>
             {downloading ? "Preparing…" : "Download PDF"}
           </button>
-          {isTeamLead && (
+          {canEdit && (
             <button className="btn-secondary" onClick={() => navigate(`/job-descriptions/${jd.id}/edit`)}>
               Edit
             </button>
           )}
-          {isTeamLead && (
+          {canArchive && (
             <button className="btn-secondary" onClick={handleArchiveToggle} disabled={archiving}>
               {jd.is_archived ? "Restore" : "Archive"}
             </button>

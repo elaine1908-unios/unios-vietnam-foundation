@@ -56,7 +56,7 @@ export function JobDescriptionsListPage() {
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Job Descriptions</h1>
-        {user?.role === "team_lead" && (
+        {user?.capabilities.includes("jobdescription.create") && (
           <Link to="/job-descriptions/new" className="btn-primary">
             New job description
           </Link>
@@ -73,7 +73,7 @@ export function JobDescriptionsListPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {user?.role === "team_lead" && (
+        {user?.capabilities.includes("jobdescription.create") && (
           <label className="flex items-center gap-2 text-sm text-ink-muted whitespace-nowrap">
             <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
             Include archived

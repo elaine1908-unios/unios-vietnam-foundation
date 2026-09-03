@@ -12,12 +12,16 @@ A Performance Profile is defined **per job title/role** (e.g. "Senior Site Engin
 
 In production the Express server also serves the built frontend, so the whole app is **one process on one port**.
 
-**Roles**, enforced server-side (not just hidden in the UI — every write route checks the caller's role regardless of what the frontend shows):
-- **Team Lead** — create/edit/archive Job Profiles and Job Descriptions, manage users (promote/demote, deactivate), manage the Career Map.
-- **Team Member** — read-only: browse, search, view, download the watermarked Job Profile PDF, and view/download Job Descriptions (not watermarked — those are meant to be shared externally).
-- **Public / logged out** — the one unauthenticated surface: `/careers`, showing only Job Descriptions a Team Lead has flagged **Now Hiring**. See "Public careers page" below.
+**Access levels**, enforced server-side via a capability table (`server/src/capabilities.ts`) — every route checks the caller's capabilities regardless of what the frontend shows, and the frontend never keeps its own copy of the table: the effective capability list rides along on `/auth/me` and the login response, so client and server can never drift apart. Cumulative — each level can do everything the one below it can, plus its own additions:
+- **Team Member** — read-only: browse, search, view, download the watermarked Job Profile PDF, view/download Job Descriptions, view the Career Map.
+- **Team Lead** — the above, plus create/edit/archive Job Profiles and Job Descriptions.
+- **Head of Department** — the above, plus create/edit/archive Career Map roles.
+- **Owner** — the above, plus all user account administration (create accounts, change access levels, deactivate/reactivate, reset passwords) and the Audit Log.
+- **Public / logged out** — the one unauthenticated surface: `/careers`, showing only Job Descriptions flagged **Now Hiring**. See "Public careers page" below.
 
-There's no self-service sign-up — a Team Lead creates every account from the **User Management** screen (name, email, initial password), which is a chicken-and-egg problem for the very first account. See step 1 below for how that one gets bootstrapped.
+There's no self-service sign-up — an Owner creates every account from the **User Management** screen (name, email, initial password, access level), which is a chicken-and-egg problem for the very first account. See step 1 below for how that one gets created.
+
+**Forced password change** — every account created by someone else (including an Owner-issued password reset) starts with `must_change_password` set, and an app-wide gate (`server/src/forcePasswordChangeGate.ts`, mounted ahead of every router except the self-service `/auth/*` endpoints) refuses everything else until they set their own. The client mirrors this in `RequireAuth.tsx`, the one wrapper every authenticated route passes through.
 
 ## 1. Configure the server
 
@@ -28,11 +32,10 @@ cp .env.example .env
 
 Open `.env` and fill in:
 - `SESSION_SECRET` — a long random string (e.g. `openssl rand -hex 32`)
-- `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` — creates one Team Lead account the first time the server boots against an empty database. Only read when the `users` table is empty, so it's safe to leave them set (later boots just no-op) or clear them out afterward — your call.
 
 `DB_PATH` defaults to `./data/profiles.db` — a single file created automatically on first run; back it up like any file.
 
-Once that first Team Lead account exists, sign in and create every other account (Team Lead or Team Member) from **User Management** — set their name, email, and an initial password there; they can ask a Team Lead to reset it any time.
+There's no env-var bootstrap for the first account — visiting the app with an empty `users` table redirects to `/setup`, a one-time screen (`POST /api/auth/setup`) that creates the first account at access level Owner and refuses once any account exists. From there, sign in and create every other account from **User Management** (name, email, initial password, access level); they'll be asked to set their own password on first sign-in.
 
 **Grammar scanning and English translation** need `ANTHROPIC_API_KEY` set (get one at [console.anthropic.com](https://console.anthropic.com), pay-per-use). Both features degrade gracefully without it — the grammar scan just doesn't block saving, and the English view/PDF shows a clear error with the original content instead of crashing. `ANTHROPIC_MODEL` optionally overrides the default (Haiku 4.5).
 
@@ -48,7 +51,7 @@ cd server && npm install && npm run dev      # API on http://localhost:4000
 cd web && npm install && npm run dev         # frontend on http://localhost:5173, proxies /api to the server
 ```
 
-Open `http://localhost:5173` and sign in with the `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` you set above.
+Open `http://localhost:5173` — an empty database redirects straight to `/setup` to create the first (Owner) account.
 
 For a real deployment, build both and run one process from the repo root:
 
@@ -67,11 +70,11 @@ npm start        # serves the API and the built frontend together on $PORT
 
 **Watermarked PDF export** (`GET /api/profiles/:id/pdf`) — any signed-in user can generate a PDF styled to match the source document (brand colors, Mark Pro typeface, bilingual section headers), with a tiled diagonal watermark and a footer line naming who downloaded it and when. This is what makes the profile "locked": Team Members can always get a current copy to print, but every copy is traceably theirs. Every download is logged to `pdf_downloads` (who, which profile, when).
 
-**Audit trail** — every profile create/update/archive/restore, and every user role change/deactivation, is logged to `audit_log` (who, what, when).
+**Audit trail** — one row per changed field (old value → new value), for Job Profiles, Career Map roles, Job Descriptions, and user accounts alike — who, what field, what it changed from/to, and when. Array-shaped sections of a profile (Key Responsibilities, Essential Requirements, OKRs, Competencies) are wholesale-replaced on every save rather than diffed row-by-row, so those log as a single "section changed" entry instead of a structural diff. Passwords are never logged in either direction — just a `<hidden>` → `<changed>`/`<reset>` placeholder. Per-profile history shows at the bottom of its detail page; the full cross-entity log (filterable by entity type, including user accounts) is at **Audit Log** (Owner only).
 
-**User Management** (Team Lead only) — create accounts (name, email, initial password, role), promote/demote between Team Lead and Team Member, reset anyone's password, deactivate/reactivate accounts. A Team Lead can't demote themselves if they're the only one left, and can't deactivate their own account — both guarded server-side.
+**User Management** (Owner only) — create accounts (name, email, initial password, access level), change access levels, reset anyone's password, deactivate/reactivate accounts. An Owner can't demote or deactivate themselves if they're the last active Owner, and can't deactivate their own account — both guarded server-side (`server/src/routes/users.ts`).
 
-**Career Map** — the master list of Unios Vietnam role titles (division → function → rank tier → role name), seeded from `Career Map_Draft.pdf`. Drives the "Job title" dropdown on the Job Profile form: picking a role auto-fills Rank, Division, and Function from the map, or a team lead can fall back to a free-text title for a role not yet listed. Team Leads manage the list itself at **Career Map** in the nav (add/rename/archive) — no code changes or new migration needed for routine additions, only the original seed came from a migration.
+**Career Map** — the master list of Unios Vietnam role titles (division → function → rank tier → role name), seeded from `Career Map_Draft.pdf`. Drives the "Job title" dropdown on the Job Profile form: picking a role auto-fills Rank, Division, and Function from the map, or a team lead can fall back to a free-text title for a role not yet listed. Viewable by every access level; only Head of Department and Owner can add, rename, or archive roles at **Career Map** in the nav — no code changes or new migration needed for routine additions, only the original seed came from a migration.
 
 Each Job Profile created from the dropdown stores a link (`career_map_role_id`) to the Career Map role it came from — shown on the profile's detail page. This link is for traceability, **not** a live mirror: if the Career Map role is later renamed, existing profiles keep their own saved title/rank/department exactly as last saved (the detail page just notes the role's current name differs). A team lead can always re-select the role on the edit form to pull in its current values. The Career Map page shows how many active profiles reference each role and asks for confirmation before archiving a role that's still in use (archiving never touches the profiles themselves — it only removes the role from the dropdown for new ones).
 
@@ -85,13 +88,13 @@ Each Job Profile created from the dropdown stores a link (`career_map_role_id`) 
 
 ## Data model
 
-- `users` — id, name, email, role (`team_lead` | `team_member`), is_active
+- `users` — id, name, email, `password_hash` (bcrypt), `access_level` (`team_member`/`team_lead`/`head_of_department`/`owner`), `is_active`, `must_change_password`
 - `career_map_roles` — division, function (nullable — blank for a division's "Head of X" role), rank (`core`/`specialists`/`leadership`/`divisional`), role_name, is_archived
 - `job_profiles` — one row per role/position: `job_title`, `rank`, `division`, `function` (separate fields — auto-filled from the linked Career Map role but independently editable), `location`, `last_updated`, `compensation`/`benefits`/`bonuses` text, `is_archived`
 - `profile_responsibilities`, `profile_requirements`, `profile_okrs`, `profile_competencies` — child rows, ordered by `sort_order`, fully replaced on every save (simplest correct approach for a form that edits whole sections at once)
 - `job_descriptions` — `job_profile_id` (FK), `location`, `is_now_hiring` (drives public visibility), `is_archived`; no role content of its own — always joined live to the linked profile
 - `job_profile_translations` — one row per profile, `content_json` (the whole translated shape as a blob — it's read-only derived output, never queried field-by-field), `source_updated_at` (to detect staleness), `translated_at`/`translated_by`
-- `audit_log` — entity_type/entity_id/action/changed_by/changed_at
+- `audit_log` — entity_type/entity_id/action/changed_by/changed_at, plus `field_name`/`old_value`/`new_value` for field-level entries (nullable — older rows and whole-entity lifecycle events like "created" leave these blank)
 - `pdf_downloads` — job_profile_id/user_id/downloaded_at (Job Profile downloads only — Job Descriptions aren't locked, so their downloads aren't logged)
 
 Schema lives in `server/src/migrations/` as numbered SQL files, tracked in a `schema_migrations` table so upgrading a live database never requires deleting it.
@@ -102,5 +105,5 @@ The app is a single Node process that needs one thing a typical serverless platf
 
 1. **Create the Railway project** — connect this repo via GitHub, or `railway up` from the repo root with the Railway CLI.
 2. **Attach a Volume**, mounted at `/data`. This is what makes the database survive redeploys.
-3. **Set environment variables**: `SESSION_SECRET`, `DB_PATH=/data/profiles.db`, `NODE_ENV=production`, `INITIAL_ADMIN_NAME`/`INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` (bootstraps the first Team Lead — see above), and `ANTHROPIC_API_KEY` if you want grammar scanning/translation live.
-4. **Deploy.** Sign in with the initial admin credentials on the live URL, then create every other account from User Management.
+3. **Set environment variables**: `SESSION_SECRET`, `DB_PATH=/data/profiles.db`, `NODE_ENV=production`, and `ANTHROPIC_API_KEY` if you want grammar scanning/translation live.
+4. **Deploy.** Visiting the live URL with an empty database redirects to `/setup` to create the first (Owner) account; create every other account from User Management afterward.
