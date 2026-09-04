@@ -5,6 +5,8 @@ import { api } from "../lib/api";
 import type { EmploymentType, GrammarIssue, JobDescriptionDetail, ProfileDetail, ProfileSummary } from "../lib/types";
 import { GrammarIssuesPanel } from "../components/GrammarIssuesPanel";
 
+const LOCATION_OPTIONS = ["All Offices (HCMC & Hanoi)", "HCMC", "Hanoi", "Tay Ninh", "Danang (Remote)"];
+
 export function JobDescriptionEditPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = !id;
@@ -145,12 +147,21 @@ export function JobDescriptionEditPage() {
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Location</span>
-          <input
-            className="input"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Ho Chi Minh City"
-          />
+          <select className="input" value={location} onChange={(e) => setLocation(e.target.value)}>
+            <option value="" disabled>
+              Select a location…
+            </option>
+            {/* An existing record's location may predate this preset list (e.g.
+                "Ho Chi Minh City" instead of "HCMC") — kept as its own option
+                so opening the edit form doesn't silently snap it to a
+                different value and overwrite it on save. */}
+            {location && !LOCATION_OPTIONS.includes(location) && <option value={location}>{location}</option>}
+            {LOCATION_OPTIONS.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Employment type</span>
