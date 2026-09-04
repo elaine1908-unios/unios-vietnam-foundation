@@ -224,7 +224,7 @@ export function ProfileDetailPage() {
     <div className="max-w-4xl">
       <div className="flex items-start justify-between mb-4 gap-3">
         <div>
-          <Link to="/" className="text-sm text-accent hover:underline">
+          <Link to="/profiles" className="text-sm text-accent hover:underline">
             ← All profiles
           </Link>
           <h1 className="font-display font-bold text-xl mt-1">{content.job_title}</h1>

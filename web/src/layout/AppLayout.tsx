@@ -18,7 +18,7 @@ export function AppLayout() {
           <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint">Career and Foundations</p>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
-          <NavLink to="/" end className={navLinkClass}>
+          <NavLink to="/profiles" end className={navLinkClass}>
             Profiles
           </NavLink>
           <NavLink to="/job-descriptions" className={navLinkClass}>

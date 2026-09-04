@@ -20,7 +20,7 @@ export function LoginPage() {
   }, []);
 
   if (loading) return null;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/profiles" replace />;
   if (needsSetup) return <Navigate to="/setup" replace />;
 
   async function handleSubmit(e: FormEvent) {

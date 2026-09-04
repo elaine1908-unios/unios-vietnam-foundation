@@ -24,7 +24,7 @@ export function SetupPage() {
       .catch(() => setNeedsSetup(false));
   }, []);
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/profiles" replace />;
   if (needsSetup === null) return null;
   if (needsSetup === false) return <Navigate to="/login" replace />;
 

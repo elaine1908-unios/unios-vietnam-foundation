@@ -14,6 +14,6 @@ export function RequireAuth({ children, cap }: { children: ReactNode; cap?: Capa
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
   if (user.must_change_password) return <ForceChangePasswordPage />;
-  if (cap && !user.capabilities.includes(cap)) return <Navigate to="/" replace />;
+  if (cap && !user.capabilities.includes(cap)) return <Navigate to="/profiles" replace />;
   return <>{children}</>;
 }

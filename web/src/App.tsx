@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthProvider";
 import { RequireAuth } from "./auth/RequireAuth";
@@ -27,6 +27,8 @@ export function App() {
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            {/* The bare domain is the public careers page - it is the advertised URL. */}
+            <Route path="/" element={<Navigate to="/careers" replace />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/setup" element={<SetupPage />} />
             <Route element={<PublicLayout />}>
@@ -40,7 +42,7 @@ export function App() {
                 </RequireAuth>
               }
             >
-              <Route path="/" element={<ProfilesListPage />} />
+              <Route path="/profiles" element={<ProfilesListPage />} />
               <Route path="/account" element={<AccountPage />} />
               <Route
                 path="/profiles/new"
