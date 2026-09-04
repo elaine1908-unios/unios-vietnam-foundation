@@ -10,6 +10,7 @@ export function PublicJobDescriptionPage() {
   const { id } = useParams<{ id: string }>();
   const [downloading, setDownloading] = useState(false);
   const [lang, setLang] = useState<JdLang>("vi");
+  const [showApplyModal, setShowApplyModal] = useState(false);
 
   // Same response shape as the internal detail endpoint — this is the
   // public.ts router re-using loadDetail(), just gated to Now Hiring +
@@ -102,16 +103,45 @@ export function PublicJobDescriptionPage() {
           <button className="btn-secondary" onClick={handleDownload} disabled={downloading || (showingEnglish && translating)}>
             {downloading ? "Preparing…" : "Download PDF"}
           </button>
-          <a
-            className="btn-primary"
-            href={`mailto:uv-recruitment@unios.com?subject=${encodeURIComponent(
-              `${jd.job_title} - Your name`,
-            )}&body=${encodeURIComponent("Please attach your CV, portfolio (if any), and LinkedIn profile (if any).")}`}
-          >
+          <button className="btn-primary" onClick={() => setShowApplyModal(true)} type="button">
             Apply
-          </a>
+          </button>
         </div>
       </div>
+
+      {showApplyModal && (
+        <div className="fixed inset-0 bg-ink/50 flex items-center justify-center p-4 z-50">
+          <div className="card max-w-md">
+            <p className="text-sm mb-3">
+              Vui lòng đính kèm CV, portfolio và LinkedIn (nếu có) khi ứng tuyển. Chúng tôi sẽ phản hồi trong vòng 5
+              ngày làm việc nếu hồ sơ phù hợp. Nếu bạn chưa nhận được phản hồi, có thể vị trí đã được tuyển đủ hoặc
+              chúng tôi đang tiếp tục với ứng viên khác. Do số lượng hồ sơ lớn, mong bạn thông cảm nếu chúng tôi
+              không thể phản hồi từng hồ sơ. Bạn vẫn có thể chủ động liên hệ để kiểm tra tình trạng ứng tuyển.
+            </p>
+            <p className="text-sm text-ink-muted mb-4">
+              Please attach your CV, portfolio, and LinkedIn profile (if available) when applying. We will get back
+              to you within 5 working days if your profile is suitable. If you do not hear from us, the position may
+              have been filled or we may be proceeding with other candidates. Due to the high volume of
+              applications, we may not be able to reply individually. Feel free to follow up to check your
+              application status.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary" onClick={() => setShowApplyModal(false)} type="button">
+                Cancel
+              </button>
+              <a
+                className="btn-primary"
+                href={`mailto:uv-recruitment@unios.com?subject=${encodeURIComponent(
+                  `${jd.job_title} - Your name`,
+                )}&body=${encodeURIComponent("Please attach your CV, portfolio (if any), and LinkedIn profile (if any).")}`}
+                onClick={() => setShowApplyModal(false)}
+              >
+                Apply Now
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {lang === "en" && translating && <p className="text-sm text-ink-muted mb-4">Translating…</p>}
       {lang === "en" && translationError && !translating && (
