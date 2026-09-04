@@ -5,16 +5,19 @@ import { api } from "../lib/api";
 import type { JobDescriptionSummary } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 
-type SortKey = "job_title" | "division" | "function" | "location" | "is_now_hiring" | "updated_at";
+type SortKey = "job_title" | "division" | "function" | "location" | "employment_type" | "is_now_hiring" | "updated_at";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "job_title", label: "Job title" },
   { key: "division", label: "Division" },
   { key: "function", label: "Function" },
   { key: "location", label: "Location" },
+  { key: "employment_type", label: "Employment type" },
   { key: "is_now_hiring", label: "Status" },
   { key: "updated_at", label: "Last updated" },
 ];
+
+const EMPLOYMENT_TYPE_LABELS = { full_time: "Full time", part_time: "Part time" } as const;
 
 export function JobDescriptionsListPage() {
   const { user } = useAuth();
@@ -121,6 +124,7 @@ export function JobDescriptionsListPage() {
                   <td className="px-4 py-2 text-ink-muted">{jd.division || "—"}</td>
                   <td className="px-4 py-2 text-ink-muted">{jd.function || "—"}</td>
                   <td className="px-4 py-2 text-ink-muted">{jd.location}</td>
+                  <td className="px-4 py-2 text-ink-muted">{EMPLOYMENT_TYPE_LABELS[jd.employment_type]}</td>
                   <td className="px-4 py-2">
                     {jd.is_now_hiring ? (
                       <span className="text-xs rounded bg-accent-soft border border-accent/30 px-1.5 py-0.5 text-accent font-medium whitespace-nowrap">

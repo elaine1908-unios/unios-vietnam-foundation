@@ -186,6 +186,8 @@ export type ProfileInput = Pick<
 // a Job Profile + a Location. Their role content (title, responsibilities
 // minus success criteria, requirements, competencies) is pulled LIVE from
 // the linked profile — never stored on the JD itself.
+export type EmploymentType = "full_time" | "part_time";
+
 export interface JobDescriptionSummary {
   id: string;
   location: string;
@@ -194,6 +196,7 @@ export interface JobDescriptionSummary {
   function: string | null;
   is_archived: boolean;
   is_now_hiring: boolean;
+  employment_type: EmploymentType;
   updated_at: string;
 }
 
@@ -219,6 +222,10 @@ export interface JobDescriptionDetail {
   function: string | null;
   is_archived: boolean;
   is_now_hiring: boolean;
+  employment_type: EmploymentType;
+  // Only meaningful for employment_type === "part_time" — full_time always
+  // uses the fixed benefits boilerplate instead (see JD_COPY.benefits).
+  custom_benefits: string | null;
   created_at: string;
   updated_at: string;
   responsibilities: JdResponsibility[];

@@ -213,9 +213,15 @@ export interface JdCompetency {
   level?: string | null;
   requirement?: string | null;
 }
+export type EmploymentType = "full_time" | "part_time";
+
 export interface JobDescriptionForPdf {
   job_title: string;
   location: string;
+  employment_type: EmploymentType;
+  // Only meaningful for "part_time" — "full_time" always uses the fixed
+  // COPY.benefits boilerplate below instead.
+  custom_benefits: string | null;
   responsibilities: JdResponsibility[];
   requirements: JdRequirement[];
   competencies: JdCompetency[];
@@ -354,9 +360,15 @@ export function JobDescriptionDocument({ jd, lang = "vi" }: { jd: JobDescription
 
         <Text style={styles.sectionTitle}>{c.benefitsTitle}</Text>
         <View>
-          {c.benefits.map((line) => (
-            <Bullet key={line}>{line}</Bullet>
-          ))}
+          {jd.employment_type === "part_time" ? (
+            jd.custom_benefits ? (
+              splitLines(jd.custom_benefits).map((line, i) => <Bullet key={i}>{line}</Bullet>)
+            ) : (
+              <Text>{c.pending}</Text>
+            )
+          ) : (
+            c.benefits.map((line) => <Bullet key={line}>{line}</Bullet>)
+          )}
         </View>
 
         <View style={styles.footer} fixed>

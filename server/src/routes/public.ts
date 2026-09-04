@@ -76,7 +76,12 @@ publicRouter.get("/job-descriptions/:id/pdf", async (req, res) => {
   if (wantsEnglish) {
     try {
       const translated = await getTranslatedJdContent(detail.job_profile_id as string, undefined);
-      jd = { ...translated, location: detail.location as string };
+      jd = {
+        ...translated,
+        location: detail.location as string,
+        employment_type: detail.employment_type as JobDescriptionForPdf["employment_type"],
+        custom_benefits: detail.custom_benefits as string | null,
+      };
     } catch (err) {
       res.status(502).json({ error: err instanceof Error ? err.message : "Translation failed." });
       return;
@@ -85,6 +90,8 @@ publicRouter.get("/job-descriptions/:id/pdf", async (req, res) => {
     jd = {
       job_title: detail.job_title as string,
       location: detail.location as string,
+      employment_type: detail.employment_type as JobDescriptionForPdf["employment_type"],
+      custom_benefits: detail.custom_benefits as string | null,
       responsibilities: detail.responsibilities as unknown as JobDescriptionForPdf["responsibilities"],
       requirements: detail.requirements as unknown as JobDescriptionForPdf["requirements"],
       competencies: detail.competencies as unknown as JobDescriptionForPdf["competencies"],

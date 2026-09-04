@@ -45,15 +45,17 @@ export function PublicJobDescriptionPage() {
   }
 
   const showingEnglish = lang === "en" && Boolean(translation);
-  const content = translation
-      ? translation
-      : {
-          job_title: jd.job_title,
-          location: jd.location,
-          responsibilities: jd.responsibilities,
-          requirements: jd.requirements,
-          competencies: jd.competencies,
-        };
+  const content = {
+    ...(translation ?? {
+      job_title: jd.job_title,
+      location: jd.location,
+      responsibilities: jd.responsibilities,
+      requirements: jd.requirements,
+      competencies: jd.competencies,
+    }),
+    employment_type: jd.employment_type,
+    custom_benefits: jd.custom_benefits,
+  };
 
   async function handleDownload() {
     setDownloading(true);

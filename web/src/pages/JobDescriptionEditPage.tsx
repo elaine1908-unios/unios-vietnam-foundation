@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import type { GrammarIssue, JobDescriptionDetail, ProfileDetail, ProfileSummary } from "../lib/types";
+import type { EmploymentType, GrammarIssue, JobDescriptionDetail, ProfileDetail, ProfileSummary } from "../lib/types";
 import { GrammarIssuesPanel } from "../components/GrammarIssuesPanel";
 
 export function JobDescriptionEditPage() {
@@ -12,6 +12,8 @@ export function JobDescriptionEditPage() {
   const [jobProfileId, setJobProfileId] = useState("");
   const [location, setLocation] = useState("");
   const [isNowHiring, setIsNowHiring] = useState(false);
+  const [employmentType, setEmploymentType] = useState<EmploymentType>("full_time");
+  const [customBenefits, setCustomBenefits] = useState("");
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,8 @@ export function JobDescriptionEditPage() {
         setJobProfileId(jd.job_profile_id);
         setLocation(jd.location);
         setIsNowHiring(jd.is_now_hiring);
+        setEmploymentType(jd.employment_type);
+        setCustomBenefits(jd.custom_benefits ?? "");
       })
       .catch(() => setError("Couldn't load this job description."))
       .finally(() => setLoading(false));
@@ -40,7 +44,7 @@ export function JobDescriptionEditPage() {
   useEffect(() => {
     setGrammarChecked(false);
     setGrammarIssues([]);
-  }, [jobProfileId, location]);
+  }, [jobProfileId, location, employmentType, customBenefits]);
 
   if (loading) return <p className="text-sm text-ink-muted">Loading…</p>;
 
@@ -57,6 +61,9 @@ export function JobDescriptionEditPage() {
         ]),
         ...profile.requirements.map((r, i) => ({ label: `Essential requirement ${i + 1}`, text: r.requirement })),
         ...profile.competencies.map((c, i) => ({ label: `Competency ${i + 1}`, text: c.requirement ?? "" })),
+        ...(employmentType === "part_time" && customBenefits.trim()
+          ? [{ label: "Benefits (part time)", text: customBenefits }]
+          : []),
       ];
       const { issues } = await api.post<{ issues: GrammarIssue[] }>("/grammar/scan", { fields });
       setGrammarChecked(true);
@@ -92,7 +99,13 @@ export function JobDescriptionEditPage() {
     setSaving(true);
     setError(null);
     try {
-      const body = { job_profile_id: jobProfileId, location: location.trim(), is_now_hiring: isNowHiring };
+      const body = {
+        job_profile_id: jobProfileId,
+        location: location.trim(),
+        is_now_hiring: isNowHiring,
+        employment_type: employmentType,
+        custom_benefits: customBenefits.trim() || null,
+      };
       const saved = isNew
         ? await api.post<JobDescriptionDetail>("/job-descriptions", body)
         : await api.patch<JobDescriptionDetail>(`/job-descriptions/${id}`, body);
@@ -139,6 +152,33 @@ export function JobDescriptionEditPage() {
             placeholder="e.g. Ho Chi Minh City"
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Employment type</span>
+          <select
+            className="input"
+            value={employmentType}
+            onChange={(e) => setEmploymentType(e.target.value as EmploymentType)}
+          >
+            <option value="full_time">Full time</option>
+            <option value="part_time">Part time</option>
+          </select>
+        </label>
+        {employmentType === "full_time" ? (
+          <p className="text-xs text-ink-faint -mt-2">
+            Benefits use the standard full-time package automatically — nothing to fill in here.
+          </p>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Benefits (part time)</span>
+            <textarea
+              className="input"
+              rows={4}
+              value={customBenefits}
+              onChange={(e) => setCustomBenefits(e.target.value)}
+              placeholder="No standard package for part-time roles — write what applies to this posting (one per line)."
+            />
+          </label>
+        )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isNowHiring} onChange={(e) => setIsNowHiring(e.target.checked)} />
           <span className="font-medium">Now Hiring</span>

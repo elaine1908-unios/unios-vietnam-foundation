@@ -41,15 +41,20 @@ export function JobDescriptionDetailPage() {
   // Only actually "showing English" once a translation has come back —
   // otherwise fall back to the original rather than mislabeling it.
   const showingEnglish = lang === "en" && Boolean(translation);
-  const content = translation
-      ? translation
-      : {
-          job_title: jd.job_title,
-          location: jd.location,
-          responsibilities: jd.responsibilities,
-          requirements: jd.requirements,
-          competencies: jd.competencies,
-        };
+  const content = {
+    ...(translation ?? {
+      job_title: jd.job_title,
+      location: jd.location,
+      responsibilities: jd.responsibilities,
+      requirements: jd.requirements,
+      competencies: jd.competencies,
+    }),
+    // Not translated — always sourced from the record itself regardless of
+    // which language is showing (employment type isn't language-dependent,
+    // and custom_benefits is HR's own free text, same as location).
+    employment_type: jd.employment_type,
+    custom_benefits: jd.custom_benefits,
+  };
 
   async function handleDownload() {
     setDownloading(true);
@@ -103,6 +108,9 @@ export function JobDescriptionDetailPage() {
                 Not public
               </span>
             )}
+            <span className="text-xs rounded bg-surface-2 border border-border px-1.5 py-0.5 text-ink-faint">
+              {jd.employment_type === "part_time" ? "Part time" : "Full time"}
+            </span>
           </div>
         </div>
         <div className="flex gap-2 shrink-0">

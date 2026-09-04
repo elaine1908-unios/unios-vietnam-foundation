@@ -1,6 +1,6 @@
 import { JD_COPY } from "../lib/jobDescriptionContent";
 import type { JdLang } from "../lib/jobDescriptionContent";
-import type { JdCompetency, JdRequirement, JdResponsibility } from "../lib/types";
+import type { EmploymentType, JdCompetency, JdRequirement, JdResponsibility } from "../lib/types";
 
 // Team Leads sometimes type multiple lines (or their own "- " bullets) into
 // a single free-text field on the Job Profile form. Rendered as one flat
@@ -45,6 +45,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export interface JobDescriptionContent {
   job_title: string;
   location: string;
+  employment_type: EmploymentType;
+  custom_benefits: string | null;
   responsibilities: JdResponsibility[];
   requirements: JdRequirement[];
   competencies: JdCompetency[];
@@ -142,11 +144,21 @@ export function JobDescriptionBody({ lang, content }: { lang: JdLang; content: J
       </Section>
 
       <Section title={c.benefitsTitle}>
-        <ul className="text-sm px-3 py-2 list-disc list-inside flex flex-col gap-2">
-          {c.benefits.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
+        {content.employment_type === "part_time" ? (
+          content.custom_benefits ? (
+            <div className="text-sm px-3 py-2">
+              <MultilineText text={content.custom_benefits} />
+            </div>
+          ) : (
+            <p className="px-3 py-3 text-sm text-ink-muted">{c.pending}</p>
+          )
+        ) : (
+          <ul className="text-sm px-3 py-2 list-disc list-inside flex flex-col gap-2">
+            {c.benefits.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        )}
       </Section>
     </>
   );
