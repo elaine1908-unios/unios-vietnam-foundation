@@ -122,24 +122,28 @@ export function JobDescriptionBody({ lang, content }: { lang: JdLang; content: J
         {content.competencies.length === 0 ? (
           <p className="px-3 py-3 text-sm text-ink-muted">{c.pending}</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-2 text-left text-ink-muted">
-                <th className="px-3 py-2 font-medium w-1/4">{c.competencyHeaders[0]}</th>
-                <th className="px-3 py-2 font-medium w-1/5">{c.competencyHeaders[1]}</th>
-                <th className="px-3 py-2 font-medium">{c.competencyHeaders[2]}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {content.competencies.map((comp, i) => (
-                <tr key={i} className="border-b border-border last:border-0 align-top">
-                  <td className="px-3 py-2">{comp.skill}</td>
-                  <td className="px-3 py-2">{comp.level || "—"}</td>
-                  <td className="px-3 py-2">{comp.requirement ? <MultilineText text={comp.requirement} /> : "—"}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm table-fixed">
+              <thead>
+                <tr className="border-b border-border bg-surface-2 text-left text-ink-muted">
+                  <th className="px-3 py-2 font-medium w-1/4">{c.competencyHeaders[0]}</th>
+                  <th className="px-3 py-2 font-medium w-1/5">{c.competencyHeaders[1]}</th>
+                  <th className="px-3 py-2 font-medium">{c.competencyHeaders[2]}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {content.competencies.map((comp, i) => (
+                  <tr key={i} className="border-b border-border last:border-0 align-top">
+                    <td className="px-3 py-2 break-words">{comp.skill}</td>
+                    <td className="px-3 py-2 break-words">{comp.level || "—"}</td>
+                    <td className="px-3 py-2 break-words">
+                      {comp.requirement ? <MultilineText text={comp.requirement} /> : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Section>
 

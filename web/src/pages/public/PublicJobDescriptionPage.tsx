@@ -73,7 +73,7 @@ export function PublicJobDescriptionPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between mb-4 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-3">
         <div>
           <Link to="/careers" className="text-sm text-accent hover:underline">
             ← All open positions
@@ -82,7 +82,7 @@ export function PublicJobDescriptionPage() {
             {jd.job_title} — {jd.location}
           </h1>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 sm:shrink-0">
           <div className="flex rounded-md border border-border overflow-hidden text-sm">
             <button
               className={`px-3 py-1.5 ${lang === "vi" ? "bg-accent text-white" : "bg-surface text-ink-muted"}`}
