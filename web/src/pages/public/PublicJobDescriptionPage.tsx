@@ -102,6 +102,14 @@ export function PublicJobDescriptionPage() {
           <button className="btn-secondary" onClick={handleDownload} disabled={downloading || (showingEnglish && translating)}>
             {downloading ? "Preparing…" : "Download PDF"}
           </button>
+          <a
+            className="btn-primary"
+            href={`mailto:uv-recruitment@unios.com?subject=${encodeURIComponent(
+              `${jd.job_title} - Your name`,
+            )}&body=${encodeURIComponent("Please attach your CV, portfolio (if any), and LinkedIn profile (if any).")}`}
+          >
+            Apply
+          </a>
         </div>
       </div>
 
