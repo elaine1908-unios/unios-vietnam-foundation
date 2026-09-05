@@ -181,7 +181,8 @@ employeesRouter.get("/", (req, res) => {
   const rows = db
     .prepare(
       `SELECT e.id, e.employee_code, e.last_name, e.middle_name, e.first_name, e.english_name, e.department, e.rank,
-              e.office_location, e.is_archived, e.is_offshore, m.id as report_to_id, m.employee_code as report_to_employee_code,
+              e.office_location, e.is_archived, e.is_offshore, e.birthday, e.commencement_date, e.contract_end_date,
+              m.id as report_to_id, m.employee_code as report_to_employee_code,
               m.last_name as report_to_last_name, m.middle_name as report_to_middle_name,
               m.first_name as report_to_first_name, m.english_name as report_to_english_name
        FROM employees e
@@ -203,6 +204,9 @@ employeesRouter.get("/", (req, res) => {
       office_location: r.office_location,
       is_archived: Boolean(r.is_archived),
       is_offshore: Boolean(r.is_offshore),
+      birthday: r.birthday,
+      commencement_date: r.commencement_date,
+      contract_end_date: r.contract_end_date,
       report_to_employee: r.report_to_id
         ? {
             id: r.report_to_id,

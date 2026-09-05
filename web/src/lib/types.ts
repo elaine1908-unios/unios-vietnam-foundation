@@ -109,6 +109,9 @@ export interface EmployeeSummary {
   report_to_employee: EmployeeRef | null;
   is_archived: boolean;
   is_offshore: boolean;
+  birthday: string | null;
+  commencement_date: string | null;
+  contract_end_date: string | null;
 }
 
 export interface EmployeeDetail {
