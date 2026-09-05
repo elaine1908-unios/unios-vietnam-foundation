@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import type { EmployeeDetail } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
+import { OffshoreIcon } from "../components/OffshoreIcon";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -64,7 +65,10 @@ export function EmployeeDetailPage() {
           <Link to="/employees" className="text-sm text-accent hover:underline">
             ← Employee Master
           </Link>
-          <h1 className="font-display font-bold text-xl mt-1">{displayName}</h1>
+          <h1 className="font-display font-bold text-xl mt-1 inline-flex items-center gap-2">
+            {displayName}
+            {e.is_offshore && <OffshoreIcon className="w-5 h-5 shrink-0" />}
+          </h1>
           {e.employee_code && <p className="font-mono text-xs text-ink-faint mt-0.5">{e.employee_code}</p>}
           <div className="flex gap-2 mt-1">
             {e.is_archived ? (

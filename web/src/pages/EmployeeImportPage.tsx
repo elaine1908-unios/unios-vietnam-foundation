@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import type { EmployeeInput } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
 import { normalizePhone } from "../lib/employeeOptions";
+import { OffshoreIcon } from "../components/OffshoreIcon";
 
 // Column headers as they appear in the real HR export ("Employee Information
 // _ Thông tin nhân viên.csv") — trimmed via Papa's transformHeader, since a
@@ -302,7 +303,12 @@ export function EmployeeImportPage() {
                         key={i}
                         className={`border-b border-border last:border-0 ${r.errors.length > 0 ? "bg-red-50" : ""}`}
                       >
-                        <td className="px-4 py-2">{employeeDisplayName(r.mapped) || "—"}</td>
+                        <td className="px-4 py-2">
+                          <span className="inline-flex items-center gap-1.5">
+                            {employeeDisplayName(r.mapped) || "—"}
+                            {r.mapped.is_offshore && <OffshoreIcon className="w-4 h-4 shrink-0" />}
+                          </span>
+                        </td>
                         <td className="px-4 py-2 text-ink-muted">{r.mapped.department || "—"}</td>
                         <td className="px-4 py-2 text-ink-muted">{r.mapped.position || "—"}</td>
                         <td className="px-4 py-2 text-ink-muted">{r.mapped.office_location || "—"}</td>

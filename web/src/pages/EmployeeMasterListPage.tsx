@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { EmployeeSummary } from "../lib/types";
+import { CAREER_RANK_LABELS, CAREER_RANK_ORDER } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
+import { OffshoreIcon } from "../components/OffshoreIcon";
 
 type SortKey = "employee_code" | "name" | "department" | "rank" | "report_to" | "is_archived";
 
@@ -27,6 +29,9 @@ export function EmployeeMasterListPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [rankFilter, setRankFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [deleting, setDeleting] = useState(false);
@@ -38,8 +43,29 @@ export function EmployeeMasterListPage() {
       api.get<EmployeeSummary[]>(`/employees?search=${encodeURIComponent(search)}${includeArchived ? "&includeArchived=true" : ""}`),
   });
 
+  // Populated from whatever's actually in the data (unaffected by the
+  // filters themselves), sorted alphabetically so the dropdowns stay
+  // predictable as departments/locations are added over time.
+  const departmentOptions = useMemo(
+    () => [...new Set((data ?? []).map((e) => e.department).filter((d): d is string => Boolean(d)))].sort(),
+    [data],
+  );
+  const locationOptions = useMemo(
+    () => [...new Set((data ?? []).map((e) => e.office_location).filter((l): l is string => Boolean(l)))].sort(),
+    [data],
+  );
+  // Career Rank uses the Career Map's own Core -> Divisional progression
+  // instead of alphabetical, same as the Dashboard's breakdown.
+  const rankOptions = CAREER_RANK_ORDER.map((k) => CAREER_RANK_LABELS[k]);
+
   const rows = useMemo(() => {
-    return [...(data ?? [])].sort((a, b) => {
+    const filtered = (data ?? []).filter(
+      (e) =>
+        (!departmentFilter || e.department === departmentFilter) &&
+        (!locationFilter || e.office_location === locationFilter) &&
+        (!rankFilter || e.rank === rankFilter),
+    );
+    return filtered.sort((a, b) => {
       if (sortKey === "is_archived") {
         const cmp = Number(a.is_archived) - Number(b.is_archived);
         return sortDir === "asc" ? cmp : -cmp;
@@ -65,7 +91,7 @@ export function EmployeeMasterListPage() {
       const cmp = av.localeCompare(bv);
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [data, sortKey, sortDir]);
+  }, [data, sortKey, sortDir, departmentFilter, locationFilter, rankFilter]);
 
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -124,13 +150,37 @@ export function EmployeeMasterListPage() {
         Per-employee HR records — owner-only for now, holds sensitive personal data.
       </p>
 
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           className="input max-w-xs"
           placeholder="Search by name or department…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <select className="input w-auto" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+          <option value="">All departments</option>
+          {departmentOptions.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <select className="input w-auto" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
+          <option value="">All locations</option>
+          {locationOptions.map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <select className="input w-auto" value={rankFilter} onChange={(e) => setRankFilter(e.target.value)}>
+          <option value="">All career ranks</option>
+          {rankOptions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
         <label className="flex items-center gap-2 text-sm text-ink-muted whitespace-nowrap">
           <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
           Include archived
@@ -166,8 +216,12 @@ export function EmployeeMasterListPage() {
                 <tr key={e.id} className="border-b border-border last:border-0 hover:bg-surface-2">
                   <td className="px-4 py-2 font-mono text-xs text-ink-muted">{e.employee_code || "—"}</td>
                   <td className="px-4 py-2">
-                    <Link to={`/employees/${e.id}`} className="text-accent font-medium hover:underline">
+                    <Link
+                      to={`/employees/${e.id}`}
+                      className="text-accent font-medium hover:underline inline-flex items-center gap-1.5"
+                    >
                       {employeeDisplayName(e)}
+                      {e.is_offshore && <OffshoreIcon className="w-4 h-4 shrink-0" />}
                     </Link>
                   </td>
                   <td className="px-4 py-2 text-ink-muted">{e.department || "—"}</td>
