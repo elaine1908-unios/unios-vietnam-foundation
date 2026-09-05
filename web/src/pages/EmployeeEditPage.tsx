@@ -13,6 +13,8 @@ import {
   HEALTH_INSURANCE_STATUSES,
   DEFAULT_PHONE_PREFIX,
   PHONE_PLACEHOLDER,
+  CONTRACT_TYPES,
+  CONTRACT_LENGTH_OPTIONS,
 } from "../lib/employeeOptions";
 import { employeeDisplayName } from "../lib/vietnamese";
 
@@ -54,6 +56,11 @@ const EMPTY_FORM: EmployeeInput = {
   relationship: "",
   contact_phone_no: DEFAULT_PHONE_PREFIX,
   health_insurance: "",
+  contract_type: "",
+  contract_length: "",
+  contract_no: "",
+  contract_start_date: "",
+  contract_end_date: "",
 };
 
 function TextField({
@@ -254,6 +261,17 @@ export function EmployeeEditPage() {
     setForm((f) => ({ ...f, report_to_employee_id: employeeId || null }));
   }
 
+  // Length of Contract options depend on Contract Type — switching type
+  // clears a length that no longer applies (e.g. "3-year" isn't a valid
+  // Probation length) rather than silently leaving a mismatched value set.
+  function handleContractTypeSelect(contractType: string) {
+    setForm((f) => {
+      const validLengths = CONTRACT_LENGTH_OPTIONS[contractType] ?? [];
+      const contractLength = validLengths.includes(f.contract_length ?? "") ? f.contract_length : "";
+      return { ...f, contract_type: contractType, contract_length: contractLength };
+    });
+  }
+
   async function handleSubmit() {
     if (!form.last_name?.trim() || !form.first_name?.trim()) {
       setError("Last name and first name are required.");
@@ -378,6 +396,28 @@ export function EmployeeEditPage() {
           <TextField label="ID No." value={form.id_no} onChange={(v) => set("id_no", v)} />
           <DateField label="Issued Date" value={form.issued_date} onChange={(v) => set("issued_date", v)} />
           <TextField label="Passport No." value={form.passport_no} onChange={(v) => set("passport_no", v)} />
+        </div>
+      </div>
+
+      <div className="card !p-4 mb-4">
+        <h2 className="font-display font-semibold mb-2">Contract Information</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <SelectField
+            label="Contract Type"
+            value={form.contract_type}
+            options={CONTRACT_TYPES}
+            onChange={handleContractTypeSelect}
+          />
+          <SelectField
+            label="Length of Contract"
+            value={form.contract_length}
+            options={CONTRACT_LENGTH_OPTIONS[form.contract_type ?? ""] ?? []}
+            onChange={(v) => set("contract_length", v)}
+          />
+          <TextField label="Contract No." value={form.contract_no} onChange={(v) => set("contract_no", v)} />
+          <div />
+          <DateField label="Start Date" value={form.contract_start_date} onChange={(v) => set("contract_start_date", v)} />
+          <DateField label="End Date" value={form.contract_end_date} onChange={(v) => set("contract_end_date", v)} />
         </div>
       </div>
 

@@ -142,6 +142,11 @@ export interface EmployeeDetail {
   relationship: string | null;
   contact_phone_no: string | null;
   health_insurance: string | null;
+  contract_type: string | null;
+  contract_length: string | null;
+  contract_no: string | null;
+  contract_start_date: string | null;
+  contract_end_date: string | null;
   // Department/Position/Rank are set only by picking a Career Map role
   // (dropdown, not free text) — this is the traceability link, same pattern
   // as ProfileDetail.career_map_role_id: department/position/rank are saved,

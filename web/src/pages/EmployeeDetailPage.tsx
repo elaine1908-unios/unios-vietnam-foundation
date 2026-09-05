@@ -146,6 +146,14 @@ export function EmployeeDetailPage() {
         <InfoRow label="Passport No." value={e.passport_no} />
       </Section>
 
+      <Section title="Contract Information">
+        <InfoRow label="Contract Type" value={e.contract_type} />
+        <InfoRow label="Length of Contract" value={e.contract_length} />
+        <InfoRow label="Contract No." value={e.contract_no} />
+        <InfoRow label="Start Date" value={e.contract_start_date} />
+        <InfoRow label="End Date" value={e.contract_end_date} />
+      </Section>
+
       <Section title="Financial">
         <InfoRow label="Personal Tax No." value={e.personal_tax_no} />
         <InfoRow label="Bank Account No." value={e.bank_account_no} />

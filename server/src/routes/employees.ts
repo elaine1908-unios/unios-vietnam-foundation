@@ -39,6 +39,11 @@ const FIELDS = [
   "relationship",
   "contact_phone_no",
   "health_insurance",
+  "contract_type",
+  "contract_length",
+  "contract_no",
+  "contract_start_date",
+  "contract_end_date",
 ] as const;
 
 interface EmployeeInput {
@@ -316,6 +321,78 @@ employeesRouter.post("/import", requireCap("employee.create"), (req, res) => {
   }
   for (const id of createdIds) logAudit("employee", id, "created", req.user!.id);
   res.status(201).json({ created: createdIds.length });
+});
+
+// Bulk UPDATE from a parsed CSV — unlike POST /import, this never creates a
+// new employee: each row is matched against an EXISTING employee by
+// employee_code (Employee ID) or work_email, and only the fields actually
+// present in that row are written — a blank cell leaves the existing value
+// alone, so a CSV built to update just one thing (e.g. Contract
+// Information for a batch of renewals) can't accidentally blank out
+// everything else the way the full-record create/edit path would. A row
+// with no match is skipped, not an error — "auto skip if not match" is the
+// whole point of this mode, since a real HR export commonly has rows for
+// people not yet in the system, or a stale email.
+interface UpdateImportRow {
+  employee_code?: string | null;
+  work_email?: string | null;
+  [key: string]: string | null | undefined;
+}
+
+function findEmployeeForUpdate(row: UpdateImportRow): Record<string, unknown> | undefined {
+  if (row.employee_code) {
+    const byCode = db.prepare("SELECT * FROM employees WHERE employee_code = ?").get(row.employee_code) as
+      | Record<string, unknown>
+      | undefined;
+    if (byCode) return byCode;
+  }
+  if (row.work_email) {
+    return db.prepare("SELECT * FROM employees WHERE work_email = ?").get(row.work_email) as
+      | Record<string, unknown>
+      | undefined;
+  }
+  return undefined;
+}
+
+employeesRouter.post("/import/update", requireCap("employee.edit"), (req, res) => {
+  const rows = (req.body?.rows ?? []) as UpdateImportRow[];
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: "rows must be a non-empty array." });
+    return;
+  }
+  const results: { row: number; status: "updated" | "skipped"; reason?: string }[] = [];
+  const updateAll = transaction(() => {
+    rows.forEach((row, i) => {
+      const existing = findEmployeeForUpdate(row);
+      if (!existing) {
+        results.push({ row: i, status: "skipped", reason: "No matching employee found" });
+        return;
+      }
+      const fieldsToUpdate = FIELDS.filter((f) => row[f]?.toString().trim());
+      if (fieldsToUpdate.length === 0) {
+        results.push({ row: i, status: "skipped", reason: "No fields to update" });
+        return;
+      }
+      const values = fieldsToUpdate.map((f) => row[f]!.toString().trim());
+      db.prepare(
+        `UPDATE employees SET ${fieldsToUpdate.map((f) => `${f} = ?`).join(", ")}, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+      ).run(...values, req.user!.id, existing.id as string);
+      const before = {
+        ...existing,
+        is_archived: Boolean(existing.is_archived),
+        is_offshore: Boolean(existing.is_offshore),
+      };
+      const after = loadDetail(existing.id as string)!;
+      diffAndLog("employee", existing.id as string, before, after, fieldsToUpdate, req.user!.id);
+      results.push({ row: i, status: "updated" });
+    });
+  });
+  updateAll();
+  res.json({
+    updated: results.filter((r) => r.status === "updated").length,
+    skipped: results.filter((r) => r.status === "skipped").length,
+    results,
+  });
 });
 
 employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {

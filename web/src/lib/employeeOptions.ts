@@ -93,3 +93,14 @@ export const MARITAL_STATUSES = [
 // Registration status for social/health insurance — not a provider or plan
 // name, despite the field's generic-sounding label.
 export const HEALTH_INSURANCE_STATUSES = ["Đã đăng ký", "Chưa đến hạn đăng ký"];
+
+export const CONTRACT_TYPES = ["Official", "Part-time", "Probation"];
+
+// Length of Contract depends on Contract Type: Probation is always a short,
+// fixed trial period, while Official/Part-time share the same longer-term
+// options (an indefinite contract, or a fixed 1- or 3-year term).
+export const CONTRACT_LENGTH_OPTIONS: Record<string, string[]> = {
+  Official: ["Indefinite", "3-year", "1-year"],
+  "Part-time": ["Indefinite", "3-year", "1-year"],
+  Probation: ["2-month", "6-month"],
+};
