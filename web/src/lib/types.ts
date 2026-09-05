@@ -81,6 +81,17 @@ export interface ProfileSummary {
 
 // Employee Master — per-employee HR record, distinct from ProfileSummary/
 // ProfileDetail (which are per-ROLE, not per-person). Owner-only.
+// Minimal shape of another employee, as referenced by report_to_employee —
+// just enough to render a name and link to their record.
+export interface EmployeeRef {
+  id: string;
+  employee_code: string | null;
+  last_name: string;
+  middle_name: string | null;
+  first_name: string;
+  english_name: string | null;
+}
+
 export interface EmployeeSummary {
   id: string;
   // Human-facing identifier (e.g. "UV-0001") — auto-assigned by the server,
@@ -92,18 +103,9 @@ export interface EmployeeSummary {
   first_name: string;
   english_name: string | null;
   department: string | null;
+  rank: string | null;
+  report_to_employee: EmployeeRef | null;
   is_archived: boolean;
-}
-
-// Minimal shape of another employee, as referenced by report_to_employee —
-// just enough to render a name and link to their record.
-export interface EmployeeRef {
-  id: string;
-  employee_code: string | null;
-  last_name: string;
-  middle_name: string | null;
-  first_name: string;
-  english_name: string | null;
 }
 
 export interface EmployeeDetail {

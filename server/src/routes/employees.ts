@@ -159,20 +159,53 @@ employeesRouter.get("/", (req, res) => {
   const includeArchived = req.query.includeArchived === "true";
   const clauses: string[] = [];
   const params: string[] = [];
-  if (!includeArchived) clauses.push("is_archived = 0");
+  if (!includeArchived) clauses.push("e.is_archived = 0");
   if (search) {
-    clauses.push("(last_name LIKE ? OR middle_name LIKE ? OR first_name LIKE ? OR english_name LIKE ? OR department LIKE ?)");
+    clauses.push(
+      "(e.last_name LIKE ? OR e.middle_name LIKE ? OR e.first_name LIKE ? OR e.english_name LIKE ? OR e.department LIKE ?)",
+    );
     const like = `%${search}%`;
     params.push(like, like, like, like, like);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  // Self-join to bring back the manager's name for the "Report To" column —
+  // the list view shouldn't need a follow-up request per row just to show
+  // who someone reports to.
   const rows = db
     .prepare(
-      `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, is_archived
-       FROM employees ${where} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`,
+      `SELECT e.id, e.employee_code, e.last_name, e.middle_name, e.first_name, e.english_name, e.department, e.rank,
+              e.is_archived, m.id as report_to_id, m.employee_code as report_to_employee_code,
+              m.last_name as report_to_last_name, m.middle_name as report_to_middle_name,
+              m.first_name as report_to_first_name, m.english_name as report_to_english_name
+       FROM employees e
+       LEFT JOIN employees m ON e.report_to_employee_id = m.id
+       ${where}
+       ORDER BY e.last_name COLLATE NOCASE, e.first_name COLLATE NOCASE`,
     )
     .all(...params) as Record<string, unknown>[];
-  res.json(rows.map((r) => ({ ...r, is_archived: Boolean(r.is_archived) })));
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      employee_code: r.employee_code,
+      last_name: r.last_name,
+      middle_name: r.middle_name,
+      first_name: r.first_name,
+      english_name: r.english_name,
+      department: r.department,
+      rank: r.rank,
+      is_archived: Boolean(r.is_archived),
+      report_to_employee: r.report_to_id
+        ? {
+            id: r.report_to_id,
+            employee_code: r.report_to_employee_code,
+            last_name: r.report_to_last_name,
+            middle_name: r.report_to_middle_name,
+            first_name: r.report_to_first_name,
+            english_name: r.report_to_english_name,
+          }
+        : null,
+    })),
+  );
 });
 
 employeesRouter.get("/:id", (req, res) => {

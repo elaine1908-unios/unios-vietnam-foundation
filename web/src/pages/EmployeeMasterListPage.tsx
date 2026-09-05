@@ -6,12 +6,14 @@ import type { EmployeeSummary } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
 
-type SortKey = "employee_code" | "name" | "department" | "is_archived";
+type SortKey = "employee_code" | "name" | "department" | "rank" | "report_to" | "is_archived";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "employee_code", label: "Employee ID" },
   { key: "name", label: "Name" },
   { key: "department", label: "Department" },
+  { key: "rank", label: "Career Rank" },
+  { key: "report_to", label: "Report To" },
   { key: "is_archived", label: "Status" },
 ];
 
@@ -42,12 +44,22 @@ export function EmployeeMasterListPage() {
         const cmp = Number(a.is_archived) - Number(b.is_archived);
         return sortDir === "asc" ? cmp : -cmp;
       }
-      const pick = (e: EmployeeSummary) =>
-        sortKey === "name"
-          ? employeeDisplayName(e)
-          : sortKey === "employee_code"
-            ? e.employee_code ?? ""
-            : e.department ?? "";
+      const pick = (e: EmployeeSummary) => {
+        switch (sortKey) {
+          case "name":
+            return employeeDisplayName(e);
+          case "employee_code":
+            return e.employee_code ?? "";
+          case "department":
+            return e.department ?? "";
+          case "rank":
+            return e.rank ?? "";
+          case "report_to":
+            return e.report_to_employee ? employeeDisplayName(e.report_to_employee) : "";
+          default:
+            return "";
+        }
+      };
       const av = pick(a).toLowerCase();
       const bv = pick(b).toLowerCase();
       const cmp = av.localeCompare(bv);
@@ -154,6 +166,16 @@ export function EmployeeMasterListPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-2 text-ink-muted">{e.department || "—"}</td>
+                  <td className="px-4 py-2 text-ink-muted">{e.rank || "—"}</td>
+                  <td className="px-4 py-2 text-ink-muted">
+                    {e.report_to_employee ? (
+                      <Link to={`/employees/${e.report_to_employee.id}`} className="hover:underline hover:text-accent">
+                        {employeeDisplayName(e.report_to_employee)}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-4 py-2">
                     {e.is_archived ? (
                       <span className="text-xs rounded bg-surface-2 border border-border px-1.5 py-0.5 text-ink-faint">
