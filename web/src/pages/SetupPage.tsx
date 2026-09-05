@@ -47,7 +47,7 @@ export function SetupPage() {
       <div className="card w-full max-w-sm">
         <UniosLogo className="h-8 text-accent-2 mb-[3px]" />
         <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint mb-4">
-          Career and Foundation
+          Careers and Foundation
         </p>
         <p className="font-display font-bold text-lg mb-1">Set up the first account</p>
         <p className="text-sm text-ink-muted mb-6">

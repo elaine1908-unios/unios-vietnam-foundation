@@ -170,13 +170,22 @@ export function EmployeeDashboardPage() {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
+    // Last day of the current month — anything on or before this counts as
+    // "expiring or already expired", not just a same-month match, so a
+    // contract that lapsed last month (or last year) still surfaces here
+    // instead of silently dropping off the list once its month has passed.
+    const endOfThisMonth = new Date(currentYear, currentMonth + 1, 0);
 
     const expiringContracts = active
       .filter((e) => e.contract_end_date)
       .map((e) => ({ e, d: parseLocalDate(e.contract_end_date!) }))
-      .filter(({ d }) => d.getMonth() === currentMonth && d.getFullYear() === currentYear)
-      .sort((a, b) => a.d.getDate() - b.d.getDate())
-      .map(({ e }) => ({ id: e.id, label: employeeDisplayName(e), detail: formatFullDate(e.contract_end_date!) }));
+      .filter(({ d }) => d <= endOfThisMonth)
+      .sort((a, b) => a.d.getTime() - b.d.getTime())
+      .map(({ e, d }) => ({
+        id: e.id,
+        label: employeeDisplayName(e),
+        detail: d < now ? `Overdue since ${formatFullDate(e.contract_end_date!)}` : formatFullDate(e.contract_end_date!),
+      }));
 
     const birthdaysThisMonth = active
       .filter((e) => e.birthday)
@@ -232,11 +241,11 @@ export function EmployeeDashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <MilestoneCard
-          title={`Contracts Expiring — ${monthName}`}
+          title={`Contracts Expired or Expiring — ${monthName}`}
           borderClass="border-l-status-critical"
           pillClass="bg-status-critical-soft text-status-critical"
           items={stats.expiringContracts}
-          emptyText="No contracts expiring this month."
+          emptyText="No contracts expired or expiring."
         />
         <MilestoneCard
           title={`Birthdays — ${monthName}`}
