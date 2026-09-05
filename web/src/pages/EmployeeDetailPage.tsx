@@ -145,7 +145,6 @@ export function EmployeeDetailPage() {
         <InfoRow label="Emergency Contact" value={e.emergency_contact} />
         <InfoRow label="Relationship" value={e.relationship} />
         <InfoRow label="Contact Phone No." value={e.contact_phone_no} />
-        <InfoRow label="Contact Address" value={e.contact_address} />
       </Section>
     </div>
   );

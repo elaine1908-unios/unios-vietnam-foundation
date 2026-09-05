@@ -85,7 +85,6 @@ function mapRow(raw: Record<string, string>): ParsedRow {
     emergency_contact: field(raw, "Emergency Contact"),
     relationship: field(raw, "Relationship"),
     contact_phone_no: contactPhone,
-    contact_address: field(raw, "Contact Address"),
     health_insurance: field(raw, "Health Insurance"),
     is_archived: raw["Archived"]?.trim().toLowerCase() === "archived",
   };

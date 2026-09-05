@@ -47,7 +47,6 @@ const EMPTY_FORM: EmployeeInput = {
   emergency_contact: "",
   relationship: "",
   contact_phone_no: DEFAULT_PHONE_PREFIX,
-  contact_address: "",
   health_insurance: "",
 };
 
@@ -336,7 +335,6 @@ export function EmployeeEditPage() {
             onChange={(v) => set("contact_phone_no", v)}
             placeholder={PHONE_PLACEHOLDER}
           />
-          <TextAreaField label="Contact Address" value={form.contact_address} onChange={(v) => set("contact_address", v)} />
         </div>
       </div>
 

@@ -125,7 +125,6 @@ export interface EmployeeDetail {
   emergency_contact: string | null;
   relationship: string | null;
   contact_phone_no: string | null;
-  contact_address: string | null;
   health_insurance: string | null;
   // Department/Position/Rank are set only by picking a Career Map role
   // (dropdown, not free text) — this is the traceability link, same pattern

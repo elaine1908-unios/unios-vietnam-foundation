@@ -38,7 +38,6 @@ const FIELDS = [
   "emergency_contact",
   "relationship",
   "contact_phone_no",
-  "contact_address",
   "health_insurance",
 ] as const;
 
