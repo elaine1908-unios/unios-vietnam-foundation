@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { groupByDivision } from "../lib/careerMap";
+import { groupByDivisionAndFunction } from "../lib/careerMap";
 import type { CareerMapRole, EmployeeDetail, EmployeeInput, EmployeeSummary } from "../lib/types";
 import { CAREER_RANK_LABELS } from "../lib/types";
 import {
@@ -16,10 +16,11 @@ import {
 } from "../lib/employeeOptions";
 import { employeeDisplayName } from "../lib/vietnamese";
 
+// No function prefix here — the optgroup label (division, and function when
+// there is one — see groupByDivisionAndFunction) already carries that.
 function roleOptionLabel(role: CareerMapRole): string {
-  const prefix = role.function ? `${role.function} — ` : "";
   const archivedSuffix = role.is_archived ? " — archived" : "";
-  return `${prefix}${role.role_name} (${role.rank[0].toUpperCase()})${archivedSuffix}`;
+  return `${role.role_name} (${role.rank[0].toUpperCase()})${archivedSuffix}`;
 }
 
 const EMPTY_FORM: EmployeeInput = {
@@ -322,9 +323,9 @@ export function EmployeeEditPage() {
             <option value="" disabled>
               Select a role…
             </option>
-            {groupByDivision(allRoles).map(([division, divisionRoles]) => (
-              <optgroup key={division} label={division}>
-                {divisionRoles.map((r) => (
+            {groupByDivisionAndFunction(allRoles).map(([group, groupRoles]) => (
+              <optgroup key={group} label={group}>
+                {groupRoles.map((r) => (
                   <option key={r.id} value={r.id}>
                     {roleOptionLabel(r)}
                   </option>
