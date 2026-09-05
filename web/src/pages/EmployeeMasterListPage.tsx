@@ -101,19 +101,24 @@ export function EmployeeMasterListPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-7xl">
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Employee Master</h1>
-        {canCreate && (
-          <div className="flex gap-2">
-            <Link to="/employees/import" className="btn-secondary">
-              Import employees
-            </Link>
-            <Link to="/employees/new" className="btn-primary">
-              New employee
-            </Link>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <Link to="/employees/dashboard" className="btn-secondary">
+            Dashboard
+          </Link>
+          {canCreate && (
+            <>
+              <Link to="/employees/import" className="btn-secondary">
+                Import employees
+              </Link>
+              <Link to="/employees/new" className="btn-primary">
+                New employee
+              </Link>
+            </>
+          )}
+        </div>
       </div>
       <p className="text-sm text-ink-muted mb-4">
         Per-employee HR records — owner-only for now, holds sensitive personal data.

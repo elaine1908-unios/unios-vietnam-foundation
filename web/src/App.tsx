@@ -12,6 +12,7 @@ import { ProfileEditPage } from "./pages/ProfileEditPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
 import { EmployeeMasterListPage } from "./pages/EmployeeMasterListPage";
+import { EmployeeDashboardPage } from "./pages/EmployeeDashboardPage";
 import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
 import { EmployeeEditPage } from "./pages/EmployeeEditPage";
 import { EmployeeImportPage } from "./pages/EmployeeImportPage";
@@ -102,6 +103,14 @@ export function App() {
                 element={
                   <RequireAuth cap="employee.create">
                     <EmployeeImportPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/employees/dashboard"
+                element={
+                  <RequireAuth cap="employee.view">
+                    <EmployeeDashboardPage />
                   </RequireAuth>
                 }
               />

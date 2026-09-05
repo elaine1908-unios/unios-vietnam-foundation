@@ -46,7 +46,8 @@ interface EmployeeInput {
   first_name?: string;
   career_map_role_id?: string | null;
   report_to_employee_id?: string | null;
-  [key: string]: string | null | undefined;
+  is_offshore?: boolean;
+  [key: string]: string | boolean | null | undefined;
 }
 
 function validate(input: EmployeeInput): string | null {
@@ -149,6 +150,7 @@ function loadDetail(id: string) {
   return {
     ...row,
     is_archived: Boolean(row.is_archived),
+    is_offshore: Boolean(row.is_offshore),
     career_map_role: careerMapRole ? { ...careerMapRole, is_archived: Boolean(careerMapRole.is_archived) } : null,
     report_to_employee: reportToEmployee ?? null,
   };
@@ -174,7 +176,7 @@ employeesRouter.get("/", (req, res) => {
   const rows = db
     .prepare(
       `SELECT e.id, e.employee_code, e.last_name, e.middle_name, e.first_name, e.english_name, e.department, e.rank,
-              e.is_archived, m.id as report_to_id, m.employee_code as report_to_employee_code,
+              e.office_location, e.is_archived, e.is_offshore, m.id as report_to_id, m.employee_code as report_to_employee_code,
               m.last_name as report_to_last_name, m.middle_name as report_to_middle_name,
               m.first_name as report_to_first_name, m.english_name as report_to_english_name
        FROM employees e
@@ -193,7 +195,9 @@ employeesRouter.get("/", (req, res) => {
       english_name: r.english_name,
       department: r.department,
       rank: r.rank,
+      office_location: r.office_location,
       is_archived: Boolean(r.is_archived),
+      is_offshore: Boolean(r.is_offshore),
       report_to_employee: r.report_to_id
         ? {
             id: r.report_to_id,
@@ -236,10 +240,10 @@ employeesRouter.post("/", requireCap("employee.create"), (req, res) => {
   }
   const id = newId();
   const values = FIELDS.map((f) => input[f]?.toString().trim() || null);
-  const employeeCode = generateEmployeeCode(input.first_name, input.last_name, input.commencement_date);
+  const employeeCode = generateEmployeeCode(input.first_name, input.last_name, input.commencement_date as string | null | undefined);
   db.prepare(
-    `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, created_by, updated_by) VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?)`,
-  ).run(id, employeeCode, ...values, careerMapRoleId, reportToId, req.user!.id, req.user!.id);
+    `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, is_offshore, created_by, updated_by) VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?)`,
+  ).run(id, employeeCode, ...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, req.user!.id, req.user!.id);
   logAudit("employee", id, "created", req.user!.id);
   res.status(201).json(loadDetail(id));
 });
@@ -278,11 +282,21 @@ employeesRouter.post("/import", requireCap("employee.create"), (req, res) => {
       // used to be before the Career Map link existed.
       const id = newId();
       const values = FIELDS.map((f) => row[f]?.toString().trim() || null);
-      const employeeCode = generateEmployeeCode(row.first_name, row.last_name, row.commencement_date);
+      const employeeCode = generateEmployeeCode(row.first_name, row.last_name, row.commencement_date as string | null | undefined);
       db.prepare(
-        `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, is_archived, created_by, updated_by)
-         VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?)`,
-      ).run(id, employeeCode, ...values, careerMapRoleId, null, row.is_archived ? 1 : 0, req.user!.id, req.user!.id);
+        `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, is_offshore, is_archived, created_by, updated_by)
+         VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        id,
+        employeeCode,
+        ...values,
+        careerMapRoleId,
+        null,
+        row.is_offshore ? 1 : 0,
+        row.is_archived ? 1 : 0,
+        req.user!.id,
+        req.user!.id,
+      );
       createdIds.push(id);
     });
     // Any row failing validation aborts the whole batch — an import is a
@@ -332,10 +346,17 @@ employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {
   }
   const values = FIELDS.map((f) => input[f]?.toString().trim() || null);
   db.prepare(
-    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(...values, careerMapRoleId, reportToId, req.user!.id, req.params.id);
+    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, is_offshore = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).run(...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, req.user!.id, req.params.id);
   const updated = loadDetail(req.params.id)!;
-  diffAndLog("employee", req.params.id, existing, updated, [...FIELDS, "career_map_role_id", "report_to_employee_id"], req.user!.id);
+  diffAndLog(
+    "employee",
+    req.params.id,
+    existing,
+    updated,
+    [...FIELDS, "career_map_role_id", "report_to_employee_id", "is_offshore"],
+    req.user!.id,
+  );
   res.json(updated);
 });
 

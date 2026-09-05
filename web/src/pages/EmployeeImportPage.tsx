@@ -78,6 +78,14 @@ function field(raw: Record<string, string>, key: string): string | null {
   return raw[key]?.trim() || null;
 }
 
+// A tick-style CSV column ("Off-shore") could come back as any of several
+// common truthy spellings depending on how it was entered — anything else
+// (blank, "no", "false") is treated as unticked.
+function isTruthy(value: string | undefined): boolean {
+  const v = value?.trim().toLowerCase();
+  return v === "yes" || v === "y" || v === "true" || v === "1" || v === "x";
+}
+
 function mapRow(raw: Record<string, string>, dateFormat: DateFormat): ParsedRow {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -117,6 +125,7 @@ function mapRow(raw: Record<string, string>, dateFormat: DateFormat): ParsedRow 
     report_to_employee_id: null,
     office_location: field(raw, "Office Location"),
     commencement_date: commencementDate.value,
+    is_offshore: isTruthy(raw["Off-shore"]),
     phone_no: phone,
     personal_tax_no: field(raw, "Personal Tax No."),
     bank_account_no: field(raw, "Bank Account No."),

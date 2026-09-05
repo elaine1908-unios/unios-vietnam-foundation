@@ -104,8 +104,10 @@ export interface EmployeeSummary {
   english_name: string | null;
   department: string | null;
   rank: string | null;
+  office_location: string | null;
   report_to_employee: EmployeeRef | null;
   is_archived: boolean;
+  is_offshore: boolean;
 }
 
 export interface EmployeeDetail {
@@ -121,6 +123,7 @@ export interface EmployeeDetail {
   rank: string | null;
   office_location: string | null;
   commencement_date: string | null;
+  is_offshore: boolean;
   phone_no: string | null;
   personal_tax_no: string | null;
   bank_account_no: string | null;

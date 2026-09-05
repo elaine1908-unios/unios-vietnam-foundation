@@ -100,6 +100,7 @@ export function EmployeeDetailPage() {
         <InfoRow label="Rank" value={e.rank} />
         <InfoRow label="Office Location" value={e.office_location} />
         <InfoRow label="Commencement Date" value={e.commencement_date} />
+        <InfoRow label="Off-shore" value={e.is_offshore ? "Yes" : "No"} />
         <div className="flex border-b border-border last:border-0">
           <div className="w-56 shrink-0 bg-surface-2 px-3 py-2 text-sm font-medium">Report To</div>
           <div className="px-3 py-2 text-sm">

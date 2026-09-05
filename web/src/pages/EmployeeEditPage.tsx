@@ -35,6 +35,7 @@ const EMPTY_FORM: EmployeeInput = {
   report_to_employee_id: null,
   office_location: "",
   commencement_date: "",
+  is_offshore: false,
   phone_no: DEFAULT_PHONE_PREFIX,
   personal_tax_no: "",
   bank_account_no: "",
@@ -112,6 +113,23 @@ function DateField({
     <label className="flex flex-col gap-1 text-sm">
       <span className="font-medium">{label}</span>
       <input className="input" type="date" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+function CheckboxField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm mt-1">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="font-medium">{label}</span>
     </label>
   );
 }
@@ -215,6 +233,10 @@ export function EmployeeEditPage() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function setOffshore(value: boolean) {
+    setForm((f) => ({ ...f, is_offshore: value }));
+  }
+
   function handleRoleSelect(roleId: string) {
     const role = allRoles.find((r) => r.id === roleId);
     if (!role) return;
@@ -293,6 +315,7 @@ export function EmployeeEditPage() {
             </select>
           </label>
         </div>
+        <CheckboxField label="Off-shore" checked={form.is_offshore} onChange={setOffshore} />
         <label className="flex flex-col gap-1 text-sm mt-3">
           <span className="font-medium">Career Map Role</span>
           <select className="input" value={form.career_map_role_id ?? ""} onChange={(e) => handleRoleSelect(e.target.value)}>
