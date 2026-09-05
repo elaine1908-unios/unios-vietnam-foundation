@@ -10,6 +10,26 @@
 // legitimate future entries. Department/Position/Rank are handled
 // separately via the Career Map link, not here.
 
+// Vietnam's domestic prefix — pre-filled on the manual form since nearly
+// every hire is a domestic number, and auto-added to whatever a CSV import
+// brings in (see normalizePhone below) so both entry paths land on the same
+// shape. Plain editable text either way: a foreign number (e.g. a Dutch or
+// Australian hire) just gets typed/edited over it.
+export const DEFAULT_PHONE_PREFIX = "(084) ";
+export const PHONE_PLACEHOLDER = "(084) XXX XXX XXX";
+
+// A CSV's phone column is typically just the bare local number (e.g. "0912
+// 345 678", however it happened to be formatted) — this adds the same
+// "(084) " prefix the manual form pre-fills, so imported and manually
+// entered numbers end up in the same shape. Left untouched if it already
+// looks like it carries a country code, so re-running normalization (or
+// importing a file that already has it) never double-prefixes.
+export function normalizePhone(value: string | null): string | null {
+  if (!value) return value;
+  if (/^\(?\+?084\)?/.test(value) || value.startsWith("+84")) return value;
+  return `${DEFAULT_PHONE_PREFIX}${value}`;
+}
+
 export const OFFICE_LOCATIONS = [
   "Unios Chelsea (Hanoi)",
   "Unios HEC (HCMC)",

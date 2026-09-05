@@ -289,3 +289,21 @@ employeesRouter.post("/:id/restore", requireCap("employee.archive"), (req, res) 
   logAudit("employee", req.params.id, "restored", req.user!.id, "is_archived", "true", "false");
   res.json({ ok: true });
 });
+
+// Danger Zone: a genuine hard delete, unlike everything else in this app —
+// meant for wiping out botched test imports while the feature is still
+// being set up, not a day-to-day operation. Requires the client to echo
+// back a literal confirmation string (the UI's own type-to-confirm prompt
+// enforces this same text) as a second guard against an accidental call.
+// audit_log rows for past employee actions are deliberately left in place
+// (no FK ties them to the now-gone rows) — the audit trail itself isn't
+// what's being reset here.
+employeesRouter.delete("/", requireCap("employee.archive"), (req, res) => {
+  if (req.body?.confirm !== "DELETE ALL EMPLOYEE DATA") {
+    res.status(400).json({ error: "Confirmation text didn't match — nothing was deleted." });
+    return;
+  }
+  const result = db.prepare("DELETE FROM employees").run();
+  logAudit("employee", "all", "deleted", req.user!.id, "bulk_delete", String(result.changes), "0");
+  res.json({ deleted: result.changes });
+});

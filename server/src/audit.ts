@@ -6,6 +6,7 @@ export type AuditAction =
   | "updated"
   | "archived"
   | "restored"
+  | "deleted"
   | "role_changed"
   | "deactivated"
   | "reactivated"

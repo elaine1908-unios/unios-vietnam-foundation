@@ -4,6 +4,7 @@ import Papa from "papaparse";
 import { api } from "../lib/api";
 import type { EmployeeInput } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
+import { normalizePhone } from "../lib/employeeOptions";
 
 // Column headers as they appear in the real HR export ("Employee Information
 // _ Thông tin nhân viên.csv") — trimmed via Papa's transformHeader, since a
@@ -38,8 +39,31 @@ interface ParsedDate {
 }
 
 function parseDate(raw: string | undefined, format: DateFormat): ParsedDate {
-  const m = raw?.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return { value: null, invalid: false };
+  const trimmed = raw?.trim();
+  if (!trimmed) return { value: null, invalid: false };
+
+  // Excel sometimes exports a date-typed cell with a trailing midnight
+  // timestamp (e.g. "6/25/2024 0:00:00") — never meaningful for these
+  // fields, so it's dropped before matching.
+  const withoutTime = trimmed.replace(/\s+\d{1,2}:\d{2}(:\d{2})?\s*$/, "");
+
+  // Already unambiguous (YYYY-MM-DD) — stored as-is, no MDY/DMY guessing.
+  const iso = withoutTime.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    const [, year, month, day] = iso;
+    const invalid = Number(month) < 1 || Number(month) > 12 || Number(day) < 1 || Number(day) > 31;
+    return { value: invalid ? null : `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`, invalid };
+  }
+
+  // Accepts "/", "-", or "." as the separator between day/month and year —
+  // a real export doesn't always use "/".
+  const m = withoutTime.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (!m) {
+    // Non-empty but didn't match anything recognized — surfaced as a
+    // warning rather than silently dropped, so a format this parser
+    // doesn't handle yet gets noticed instead of quietly importing blank.
+    return { value: null, invalid: true };
+  }
   const [, a, b, year] = m;
   const month = format === "MDY" ? a : b;
   const day = format === "MDY" ? b : a;
@@ -62,8 +86,8 @@ function mapRow(raw: Record<string, string>, dateFormat: DateFormat): ParsedRow 
   if (!lastName) errors.push("Missing Last Name");
   if (!firstName) errors.push("Missing First Name");
 
-  const phone = field(raw, "Phone No.");
-  const contactPhone = field(raw, "Contact Phone No.");
+  const phone = normalizePhone(field(raw, "Phone No."));
+  const contactPhone = normalizePhone(field(raw, "Contact Phone No."));
   if (looksCorrupted(raw["Phone No."])) {
     warnings.push("Phone No. looks corrupted by Excel (scientific notation) — original digits are likely lost");
   }
@@ -74,9 +98,9 @@ function mapRow(raw: Record<string, string>, dateFormat: DateFormat): ParsedRow 
   const commencementDate = parseDate(raw["Commencement Date"], dateFormat);
   const birthday = parseDate(raw["Birthday"], dateFormat);
   const issuedDate = parseDate(raw["Issued Date"], dateFormat);
-  if (commencementDate.invalid) warnings.push(`Commencement Date "${raw["Commencement Date"]}" isn't a valid date in the selected format`);
-  if (birthday.invalid) warnings.push(`Birthday "${raw["Birthday"]}" isn't a valid date in the selected format`);
-  if (issuedDate.invalid) warnings.push(`Issued Date "${raw["Issued Date"]}" isn't a valid date in the selected format`);
+  if (commencementDate.invalid) warnings.push(`Commencement Date "${raw["Commencement Date"]}" couldn't be parsed as a date`);
+  if (birthday.invalid) warnings.push(`Birthday "${raw["Birthday"]}" couldn't be parsed as a date`);
+  if (issuedDate.invalid) warnings.push(`Issued Date "${raw["Issued Date"]}" couldn't be parsed as a date`);
 
   const mapped: ImportRow = {
     work_email: field(raw, "Work Email"),

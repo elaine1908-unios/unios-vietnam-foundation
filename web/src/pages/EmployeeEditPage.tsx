@@ -5,19 +5,21 @@ import { api } from "../lib/api";
 import { groupByDivision } from "../lib/careerMap";
 import type { CareerMapRole, EmployeeDetail, EmployeeInput } from "../lib/types";
 import { CAREER_RANK_LABELS } from "../lib/types";
-import { OFFICE_LOCATIONS, BANK_NAMES, GENDERS, MARITAL_STATUSES, HEALTH_INSURANCE_STATUSES } from "../lib/employeeOptions";
+import {
+  OFFICE_LOCATIONS,
+  BANK_NAMES,
+  GENDERS,
+  MARITAL_STATUSES,
+  HEALTH_INSURANCE_STATUSES,
+  DEFAULT_PHONE_PREFIX,
+  PHONE_PLACEHOLDER,
+} from "../lib/employeeOptions";
 
 function roleOptionLabel(role: CareerMapRole): string {
   const prefix = role.function ? `${role.function} — ` : "";
   const archivedSuffix = role.is_archived ? " — archived" : "";
   return `${prefix}${role.role_name} (${role.rank[0].toUpperCase()})${archivedSuffix}`;
 }
-
-// Vietnam's domestic prefix — pre-filled since nearly every hire is a
-// domestic number, but plain editable text: someone entering a foreign
-// number (see e.g. a Dutch or Australian hire) just types over it.
-const DEFAULT_PHONE_PREFIX = "(084) ";
-const PHONE_PLACEHOLDER = "(084) XXX XXX XXX";
 
 const EMPTY_FORM: EmployeeInput = {
   work_email: "",
