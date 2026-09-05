@@ -2,11 +2,12 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import type { EmployeeSummary } from "../lib/types";
+import type { EmployeeDetail, EmployeeSummary } from "../lib/types";
 import { CAREER_RANK_LABELS, CAREER_RANK_ORDER } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
 import { OffshoreIcon } from "../components/OffshoreIcon";
+import { employeesToCsv, downloadCsv } from "../lib/employeeExport";
 
 type SortKey = "employee_code" | "name" | "department" | "rank" | "report_to" | "is_archived";
 
@@ -36,6 +37,8 @@ export function EmployeeMasterListPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["employees", search, includeArchived],
@@ -103,6 +106,7 @@ export function EmployeeMasterListPage() {
 
   const canCreate = user?.capabilities.includes("employee.create") ?? false;
   const canDelete = user?.capabilities.includes("employee.archive") ?? false;
+  const canExport = user?.capabilities.includes("employee.export") ?? false;
 
   async function handleDeleteAll() {
     const typed = window.prompt(
@@ -126,6 +130,34 @@ export function EmployeeMasterListPage() {
     }
   }
 
+  // Exports exactly what's currently on screen — same search/archived query
+  // as the table, plus the same Department/Location/Career Rank filters
+  // applied client-side, so there's no surprise between what's visible and
+  // what ends up in the file. Fetches full-detail rows (the table itself
+  // only holds the summary shape) so the CSV carries every field, matching
+  // the "Update existing employees only" import mode's column set.
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const full = await api.get<EmployeeDetail[]>(
+        `/employees/export?search=${encodeURIComponent(search)}${includeArchived ? "&includeArchived=true" : ""}`,
+      );
+      const filtered = full.filter(
+        (e) =>
+          (!departmentFilter || e.department === departmentFilter) &&
+          (!locationFilter || e.office_location === locationFilter) &&
+          (!rankFilter || e.rank === rankFilter),
+      );
+      const date = new Date().toISOString().slice(0, 10);
+      downloadCsv(`employee-master-${date}.csv`, employeesToCsv(filtered));
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="max-w-7xl">
       <div className="flex items-center justify-between mb-1 gap-3">
@@ -134,6 +166,11 @@ export function EmployeeMasterListPage() {
           <Link to="/employees/dashboard" className="btn-secondary">
             Dashboard
           </Link>
+          {canExport && (
+            <button className="btn-secondary" onClick={handleExport} disabled={exporting} type="button">
+              {exporting ? "Exporting…" : "Export"}
+            </button>
+          )}
           {canCreate && (
             <>
               <Link to="/employees/import" className="btn-secondary">
@@ -149,6 +186,7 @@ export function EmployeeMasterListPage() {
       <p className="text-sm text-ink-muted mb-4">
         Per-employee HR records — owner-only for now, holds sensitive personal data.
       </p>
+      {exportError && <p className="text-sm text-red-600 mb-4">{exportError}</p>}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input

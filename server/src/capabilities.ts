@@ -41,6 +41,11 @@ export const CAPABILITIES = [
   "employee.create",
   "employee.edit",
   "employee.archive",
+  // Distinct from employee.view — exporting hands out the same sensitive
+  // data as a file, not just a page view, so it's tracked as its own
+  // capability even though today's only tier granting it (owner) also
+  // grants employee.view anyway.
+  "employee.export",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -56,7 +61,7 @@ const ADDED_BY_LEVEL: Record<AccessLevel, Capability[]> = {
   team_member: ["profile.view", "careermap.view", "jobdescription.view"],
   team_lead: ["profile.create", "profile.edit", "profile.archive", "jobdescription.create", "jobdescription.edit", "jobdescription.archive"],
   head_of_department: ["careerrole.create", "careerrole.edit", "careerrole.archive"],
-  owner: ["user.admin", "employee.view", "employee.create", "employee.edit", "employee.archive"],
+  owner: ["user.admin", "employee.view", "employee.create", "employee.edit", "employee.archive", "employee.export"],
 };
 
 const CAPS_BY_LEVEL: Record<AccessLevel, Capability[]> = (() => {

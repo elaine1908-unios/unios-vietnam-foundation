@@ -28,7 +28,8 @@ export type Capability =
   | "employee.view"
   | "employee.create"
   | "employee.edit"
-  | "employee.archive";
+  | "employee.archive"
+  | "employee.export";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 

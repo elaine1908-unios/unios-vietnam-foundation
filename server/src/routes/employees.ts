@@ -217,6 +217,29 @@ employeesRouter.get("/", (req, res) => {
   );
 });
 
+// Full-detail rows (not just the summary shape GET / uses for the table) —
+// backs the "Export" button, which needs every field so the CSV round-trips
+// through the update-import mode. Same search/includeArchived semantics as
+// GET / so an export always matches what's currently on screen; must be
+// registered before GET /:id or "/export" would be swallowed as an :id.
+employeesRouter.get("/export", requireCap("employee.export"), (req, res) => {
+  const search = String(req.query.search ?? "").trim();
+  const includeArchived = req.query.includeArchived === "true";
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (!includeArchived) clauses.push("is_archived = 0");
+  if (search) {
+    clauses.push("(last_name LIKE ? OR middle_name LIKE ? OR first_name LIKE ? OR english_name LIKE ? OR department LIKE ?)");
+    const like = `%${search}%`;
+    params.push(like, like, like, like, like);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const ids = db
+    .prepare(`SELECT id FROM employees ${where} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`)
+    .all(...params) as { id: string }[];
+  res.json(ids.map((r) => loadDetail(r.id)));
+});
+
 employeesRouter.get("/:id", (req, res) => {
   const row = loadDetail(req.params.id);
   if (!row) {
