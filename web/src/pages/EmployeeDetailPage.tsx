@@ -65,7 +65,7 @@ export function EmployeeDetailPage() {
           <Link to="/employees" className="text-sm text-accent hover:underline">
             ← Employee Master
           </Link>
-          <h1 className="font-display font-bold text-xl mt-1 inline-flex items-center gap-2">
+          <h1 className="font-display font-bold text-xl mt-1 flex items-center gap-2">
             {displayName}
             {e.is_offshore && <OffshoreIcon className="w-5 h-5 shrink-0" />}
           </h1>
