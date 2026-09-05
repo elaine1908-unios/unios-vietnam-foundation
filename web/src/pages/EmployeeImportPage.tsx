@@ -9,10 +9,6 @@ import { OffshoreIcon } from "../components/OffshoreIcon";
 
 type ImportMode = "create" | "update";
 
-// Column headers as they appear in the real HR export ("Employee Information
-// _ Thông tin nhân viên.csv") — trimmed via Papa's transformHeader, since a
-// few (e.g. "ID No. ", "Contact Phone No. ") carry a trailing space in the
-// source file.
 type ImportRow = EmployeeInput & { is_archived: boolean };
 
 interface ParsedRow {
@@ -77,10 +73,6 @@ function parseDate(raw: string | undefined, format: DateFormat): ParsedDate {
   return { value: invalid ? null : `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`, invalid };
 }
 
-function field(raw: Record<string, string>, key: string): string | null {
-  return raw[key]?.trim() || null;
-}
-
 // A tick-style CSV column ("Off-shore") could come back as any of several
 // common truthy spellings depending on how it was entered — anything else
 // (blank, "no", "false") is treated as unticked.
@@ -89,6 +81,124 @@ function isTruthy(value: string | undefined): boolean {
   return v === "yes" || v === "y" || v === "true" || v === "1" || v === "x";
 }
 
+// --- Column mapping ---------------------------------------------------
+//
+// A real HR export's exact header wording varies (case, "Length of
+// Contract" vs "Contract Length", trailing spaces, ...) — rather than
+// guessing silently, every column is matched explicitly: the file's actual
+// headers are detected once on upload, a best-guess mapping is proposed
+// (case-insensitive, and trying a couple of known alternate spellings per
+// field), and the user reviews/corrects it in the "Map Columns" section
+// before anything is parsed into rows.
+interface FieldSpec {
+  key: string;
+  label: string;
+  aliases: string[];
+}
+
+const IDENTITY_FIELDS: FieldSpec[] = [{ key: "employee_code", label: "Employee ID", aliases: ["Employee ID"] }];
+
+const WORK_FIELDS: FieldSpec[] = [
+  { key: "work_email", label: "Work Email", aliases: ["Work Email"] },
+  { key: "phone_no", label: "Phone No.", aliases: ["Phone No."] },
+  { key: "department", label: "Department", aliases: ["Department"] },
+  { key: "position", label: "Position", aliases: ["Position"] },
+  { key: "office_location", label: "Office Location", aliases: ["Office Location"] },
+  { key: "commencement_date", label: "Commencement Date", aliases: ["Commencement Date"] },
+  { key: "is_offshore", label: "Off-shore", aliases: ["Off-shore"] },
+];
+
+const PERSONAL_FIELDS: FieldSpec[] = [
+  { key: "last_name", label: "Last Name", aliases: ["Last Name"] },
+  { key: "middle_name", label: "Middle Name", aliases: ["Middle Name"] },
+  { key: "first_name", label: "First Name", aliases: ["First Name"] },
+  { key: "english_name", label: "English Name", aliases: ["English Name"] },
+  { key: "gender", label: "Gender", aliases: ["Gender"] },
+  { key: "marital_status", label: "Marital Status", aliases: ["Marital Status"] },
+  { key: "birthday", label: "Birthday", aliases: ["Birthday"] },
+  { key: "nationality", label: "Nationality", aliases: ["Nationality"] },
+];
+
+const IDENTIFICATION_FIELDS: FieldSpec[] = [
+  { key: "id_no", label: "ID No.", aliases: ["ID No."] },
+  { key: "issued_date", label: "Issued Date", aliases: ["Issued Date"] },
+  { key: "passport_no", label: "Passport No.", aliases: ["Passport No."] },
+];
+
+const CONTRACT_FIELDS: FieldSpec[] = [
+  { key: "contract_type", label: "Contract Type", aliases: ["Contract Type"] },
+  { key: "contract_length", label: "Contract Length", aliases: ["Contract Length", "Length of Contract"] },
+  { key: "contract_no", label: "Contract No.", aliases: ["Contract No."] },
+  { key: "contract_start_date", label: "Contract Start Date", aliases: ["Contract Start Date", "Start Date"] },
+  { key: "contract_end_date", label: "Contract End Date", aliases: ["Contract End Date", "End Date"] },
+];
+
+const FINANCIAL_FIELDS: FieldSpec[] = [
+  { key: "personal_tax_no", label: "Personal Tax No.", aliases: ["Personal Tax No."] },
+  { key: "bank_account_no", label: "Bank Account No.", aliases: ["Bank Account No."] },
+  { key: "bank_name", label: "Bank Name", aliases: ["Bank Name"] },
+  { key: "health_insurance", label: "Health Insurance", aliases: ["Health Insurance"] },
+];
+
+const ADDRESS_FIELDS: FieldSpec[] = [
+  { key: "permanent_address", label: "Permanent Address", aliases: ["Permanent Address"] },
+  { key: "temporary_address", label: "Temporary Address", aliases: ["Temporary Address"] },
+];
+
+const EMERGENCY_FIELDS: FieldSpec[] = [
+  { key: "emergency_contact", label: "Emergency Contact", aliases: ["Emergency Contact"] },
+  { key: "relationship", label: "Relationship", aliases: ["Relationship"] },
+  { key: "contact_phone_no", label: "Contact Phone No.", aliases: ["Contact Phone No."] },
+];
+
+const STATUS_FIELDS: FieldSpec[] = [{ key: "is_archived", label: "Archived", aliases: ["Archived"] }];
+
+// Employee ID only matters as a match key in update mode — create mode
+// never sets it (the server always auto-generates it), so that section is
+// left out there (see the sections computed in the component below).
+const COMMON_SECTIONS: { title: string; fields: FieldSpec[] }[] = [
+  { title: "Work Information", fields: WORK_FIELDS },
+  { title: "Personal Information", fields: PERSONAL_FIELDS },
+  { title: "Identification", fields: IDENTIFICATION_FIELDS },
+  { title: "Contract Information", fields: CONTRACT_FIELDS },
+  { title: "Financial", fields: FINANCIAL_FIELDS },
+  { title: "Address", fields: ADDRESS_FIELDS },
+  { title: "Emergency Contact", fields: EMERGENCY_FIELDS },
+  { title: "Status", fields: STATUS_FIELDS },
+];
+
+function fieldSectionsFor(mode: ImportMode): { title: string; fields: FieldSpec[] }[] {
+  return mode === "update" ? [{ title: "Matching", fields: IDENTITY_FIELDS }, ...COMMON_SECTIONS] : COMMON_SECTIONS;
+}
+
+function detectHeader(headers: string[], aliases: string[]): string {
+  const lower = headers.map((h) => h.toLowerCase());
+  for (const alias of aliases) {
+    const idx = lower.indexOf(alias.toLowerCase());
+    if (idx !== -1) return headers[idx];
+  }
+  return "";
+}
+
+function buildAutoMapping(headers: string[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  for (const spec of [...IDENTITY_FIELDS, ...COMMON_SECTIONS.flatMap((s) => s.fields)]) {
+    mapping[spec.key] = detectHeader(headers, spec.aliases);
+  }
+  return mapping;
+}
+
+function mappedRaw(raw: Record<string, string>, mapping: Record<string, string>, key: string): string | undefined {
+  const header = mapping[key];
+  return header ? raw[header] : undefined;
+}
+
+function mappedField(raw: Record<string, string>, mapping: Record<string, string>, key: string): string | null {
+  return mappedRaw(raw, mapping, key)?.trim() || null;
+}
+
+// --- Row mapping --------------------------------------------------------
+//
 // Shared between both import modes — every plain (non-relational) field,
 // which is the entire column set a create AND an update CSV can carry.
 // Create additionally sets rank/career_map_role_id/report_to_employee_id/
@@ -129,59 +239,71 @@ interface PlainFields {
   contract_end_date: string | null;
 }
 
-function mapPlainFields(raw: Record<string, string>, dateFormat: DateFormat): { mapped: PlainFields; warnings: string[] } {
+function mapPlainFields(
+  raw: Record<string, string>,
+  mapping: Record<string, string>,
+  dateFormat: DateFormat,
+): { mapped: PlainFields; warnings: string[] } {
   const warnings: string[] = [];
-  const phone = normalizePhone(field(raw, "Phone No."));
-  const contactPhone = normalizePhone(field(raw, "Contact Phone No."));
-  if (looksCorrupted(raw["Phone No."])) {
+  const phone = normalizePhone(mappedField(raw, mapping, "phone_no"));
+  const contactPhone = normalizePhone(mappedField(raw, mapping, "contact_phone_no"));
+  if (looksCorrupted(mappedRaw(raw, mapping, "phone_no"))) {
     warnings.push("Phone No. looks corrupted by Excel (scientific notation) — original digits are likely lost");
   }
-  if (looksCorrupted(raw["Contact Phone No."])) {
+  if (looksCorrupted(mappedRaw(raw, mapping, "contact_phone_no"))) {
     warnings.push("Contact Phone No. looks corrupted by Excel (scientific notation) — original digits are likely lost");
   }
 
-  const commencementDate = parseDate(raw["Commencement Date"], dateFormat);
-  const birthday = parseDate(raw["Birthday"], dateFormat);
-  const issuedDate = parseDate(raw["Issued Date"], dateFormat);
-  const contractStart = parseDate(raw["Contract Start Date"], dateFormat);
-  const contractEnd = parseDate(raw["Contract End Date"], dateFormat);
-  if (commencementDate.invalid) warnings.push(`Commencement Date "${raw["Commencement Date"]}" couldn't be parsed as a date`);
-  if (birthday.invalid) warnings.push(`Birthday "${raw["Birthday"]}" couldn't be parsed as a date`);
-  if (issuedDate.invalid) warnings.push(`Issued Date "${raw["Issued Date"]}" couldn't be parsed as a date`);
-  if (contractStart.invalid) warnings.push(`Contract Start Date "${raw["Contract Start Date"]}" couldn't be parsed as a date`);
-  if (contractEnd.invalid) warnings.push(`Contract End Date "${raw["Contract End Date"]}" couldn't be parsed as a date`);
+  const commencementDate = parseDate(mappedRaw(raw, mapping, "commencement_date"), dateFormat);
+  const birthday = parseDate(mappedRaw(raw, mapping, "birthday"), dateFormat);
+  const issuedDate = parseDate(mappedRaw(raw, mapping, "issued_date"), dateFormat);
+  const contractStart = parseDate(mappedRaw(raw, mapping, "contract_start_date"), dateFormat);
+  const contractEnd = parseDate(mappedRaw(raw, mapping, "contract_end_date"), dateFormat);
+  if (commencementDate.invalid) {
+    warnings.push(`Commencement Date "${mappedRaw(raw, mapping, "commencement_date")}" couldn't be parsed as a date`);
+  }
+  if (birthday.invalid) warnings.push(`Birthday "${mappedRaw(raw, mapping, "birthday")}" couldn't be parsed as a date`);
+  if (issuedDate.invalid) {
+    warnings.push(`Issued Date "${mappedRaw(raw, mapping, "issued_date")}" couldn't be parsed as a date`);
+  }
+  if (contractStart.invalid) {
+    warnings.push(`Contract Start Date "${mappedRaw(raw, mapping, "contract_start_date")}" couldn't be parsed as a date`);
+  }
+  if (contractEnd.invalid) {
+    warnings.push(`Contract End Date "${mappedRaw(raw, mapping, "contract_end_date")}" couldn't be parsed as a date`);
+  }
 
   return {
     mapped: {
-      work_email: field(raw, "Work Email"),
-      last_name: field(raw, "Last Name"),
-      middle_name: field(raw, "Middle Name"),
-      first_name: field(raw, "First Name"),
-      english_name: field(raw, "English Name"),
-      department: field(raw, "Department"),
-      position: field(raw, "Position"),
-      office_location: field(raw, "Office Location"),
+      work_email: mappedField(raw, mapping, "work_email"),
+      last_name: mappedField(raw, mapping, "last_name"),
+      middle_name: mappedField(raw, mapping, "middle_name"),
+      first_name: mappedField(raw, mapping, "first_name"),
+      english_name: mappedField(raw, mapping, "english_name"),
+      department: mappedField(raw, mapping, "department"),
+      position: mappedField(raw, mapping, "position"),
+      office_location: mappedField(raw, mapping, "office_location"),
       commencement_date: commencementDate.value,
       phone_no: phone,
-      personal_tax_no: field(raw, "Personal Tax No."),
-      bank_account_no: field(raw, "Bank Account No."),
-      bank_name: field(raw, "Bank Name"),
-      gender: field(raw, "Gender"),
-      marital_status: field(raw, "Marital Status"),
+      personal_tax_no: mappedField(raw, mapping, "personal_tax_no"),
+      bank_account_no: mappedField(raw, mapping, "bank_account_no"),
+      bank_name: mappedField(raw, mapping, "bank_name"),
+      gender: mappedField(raw, mapping, "gender"),
+      marital_status: mappedField(raw, mapping, "marital_status"),
       birthday: birthday.value,
-      id_no: field(raw, "ID No."),
+      id_no: mappedField(raw, mapping, "id_no"),
       issued_date: issuedDate.value,
-      passport_no: field(raw, "Passport No."),
-      nationality: field(raw, "Nationality"),
-      permanent_address: field(raw, "Permanent Address"),
-      temporary_address: field(raw, "Temporary Address"),
-      emergency_contact: field(raw, "Emergency Contact"),
-      relationship: field(raw, "Relationship"),
+      passport_no: mappedField(raw, mapping, "passport_no"),
+      nationality: mappedField(raw, mapping, "nationality"),
+      permanent_address: mappedField(raw, mapping, "permanent_address"),
+      temporary_address: mappedField(raw, mapping, "temporary_address"),
+      emergency_contact: mappedField(raw, mapping, "emergency_contact"),
+      relationship: mappedField(raw, mapping, "relationship"),
       contact_phone_no: contactPhone,
-      health_insurance: field(raw, "Health Insurance"),
-      contract_type: field(raw, "Contract Type"),
-      contract_length: field(raw, "Contract Length"),
-      contract_no: field(raw, "Contract No."),
+      health_insurance: mappedField(raw, mapping, "health_insurance"),
+      contract_type: mappedField(raw, mapping, "contract_type"),
+      contract_length: mappedField(raw, mapping, "contract_length"),
+      contract_no: mappedField(raw, mapping, "contract_no"),
       contract_start_date: contractStart.value,
       contract_end_date: contractEnd.value,
     },
@@ -189,9 +311,9 @@ function mapPlainFields(raw: Record<string, string>, dateFormat: DateFormat): { 
   };
 }
 
-function mapCreateRow(raw: Record<string, string>, dateFormat: DateFormat): ParsedRow {
+function mapCreateRow(raw: Record<string, string>, mapping: Record<string, string>, dateFormat: DateFormat): ParsedRow {
   const errors: string[] = [];
-  const { mapped: plain, warnings } = mapPlainFields(raw, dateFormat);
+  const { mapped: plain, warnings } = mapPlainFields(raw, mapping, dateFormat);
   if (!plain.last_name) errors.push("Missing Last Name");
   if (!plain.first_name) errors.push("Missing First Name");
 
@@ -204,8 +326,8 @@ function mapCreateRow(raw: Record<string, string>, dateFormat: DateFormat): Pars
     // Not part of the CSV mapping — set manually per employee afterward
     // (same reasoning as career_map_role_id above).
     report_to_employee_id: null,
-    is_offshore: isTruthy(raw["Off-shore"]),
-    is_archived: raw["Archived"]?.trim().toLowerCase() === "archived",
+    is_offshore: isTruthy(mappedRaw(raw, mapping, "is_offshore")),
+    is_archived: mappedRaw(raw, mapping, "is_archived")?.trim().toLowerCase() === "archived",
   };
   return { mapped, errors, warnings };
 }
@@ -228,9 +350,9 @@ interface UpdateParsedRow {
   fieldCount: number;
 }
 
-function mapUpdateRow(raw: Record<string, string>, dateFormat: DateFormat): UpdateParsedRow {
-  const { mapped: plain, warnings } = mapPlainFields(raw, dateFormat);
-  const employeeCode = field(raw, "Employee ID");
+function mapUpdateRow(raw: Record<string, string>, mapping: Record<string, string>, dateFormat: DateFormat): UpdateParsedRow {
+  const { mapped: plain, warnings } = mapPlainFields(raw, mapping, dateFormat);
+  const employeeCode = mappedField(raw, mapping, "employee_code");
   const mapped: UpdateMappedRow = { ...plain, employee_code: employeeCode };
   const fieldCount = Object.entries(plain).filter(([, v]) => v).length;
   return { mapped, warnings, hasMatchKey: Boolean(employeeCode || plain.work_email), fieldCount };
@@ -247,6 +369,8 @@ export function EmployeeImportPage() {
   const [mode, setMode] = useState<ImportMode>("create");
   const [fileName, setFileName] = useState("");
   const [rawRows, setRawRows] = useState<Record<string, string>[] | null>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [dateFormat, setDateFormat] = useState<DateFormat>("MDY");
   const [parseError, setParseError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
@@ -254,16 +378,18 @@ export function EmployeeImportPage() {
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const [updateResult, setUpdateResult] = useState<UpdateImportResult | null>(null);
 
-  // Re-mapped whenever the mode or date format changes, not just on upload —
-  // so switching Create <-> Update or MM/DD <-> DD/MM re-evaluates every row
-  // without needing to re-upload the file.
+  const sections = fieldSectionsFor(mode);
+
+  // Re-mapped whenever the mode, mapping, or date format changes, not just
+  // on upload — so adjusting a column mapping, switching Create <-> Update,
+  // or MM/DD <-> DD/MM re-evaluates every row without needing to re-upload.
   const createRows = useMemo<ParsedRow[] | null>(
-    () => (mode === "create" ? (rawRows?.map((r) => mapCreateRow(r, dateFormat)) ?? null) : null),
-    [rawRows, dateFormat, mode],
+    () => (mode === "create" ? (rawRows?.map((r) => mapCreateRow(r, columnMapping, dateFormat)) ?? null) : null),
+    [rawRows, dateFormat, mode, columnMapping],
   );
   const updateRows = useMemo<UpdateParsedRow[] | null>(
-    () => (mode === "update" ? (rawRows?.map((r) => mapUpdateRow(r, dateFormat)) ?? null) : null),
-    [rawRows, dateFormat, mode],
+    () => (mode === "update" ? (rawRows?.map((r) => mapUpdateRow(r, columnMapping, dateFormat)) ?? null) : null),
+    [rawRows, dateFormat, mode, columnMapping],
   );
 
   function resetOutcome() {
@@ -291,12 +417,20 @@ export function EmployeeImportPage() {
         if (results.errors.length > 0) {
           setParseError(results.errors[0].message);
           setRawRows(null);
+          setHeaders([]);
           return;
         }
+        const detected = results.meta.fields ?? [];
+        setHeaders(detected);
+        setColumnMapping(buildAutoMapping(detected));
         setRawRows(results.data);
       },
       error: (err) => setParseError(err.message),
     });
+  }
+
+  function setMappingFor(key: string, header: string) {
+    setColumnMapping((m) => ({ ...m, [key]: header }));
   }
 
   const errorCount = createRows?.filter((r) => r.errors.length > 0).length ?? 0;
@@ -339,8 +473,8 @@ export function EmployeeImportPage() {
       </Link>
       <h1 className="font-display font-bold text-xl mt-1 mb-1">Import employees</h1>
       <p className="text-sm text-ink-muted mb-4">
-        Upload a CSV matching the Employee Master column headers. Nothing is saved until you review the preview
-        below and confirm.
+        Upload a CSV, then confirm which of its columns map to which Employee Master field. Nothing is saved until
+        you review the preview below and confirm.
       </p>
 
       {done ? (
@@ -414,35 +548,84 @@ export function EmployeeImportPage() {
               <input className="input" type="file" accept=".csv" onChange={handleFile} />
             </label>
             {parseError && <p className="text-sm text-red-600 mt-2">Couldn't parse this file: {parseError}</p>}
+          </div>
 
-            <div className="mt-3 text-sm">
-              <span className="font-medium">Date format in this file</span>
-              <p className="text-xs text-ink-faint mb-1">
-                Applies to every date column. A date like 03/05/2024 is ambiguous by itself — pick whichever order
-                this file actually uses.
+          {headers.length > 0 && (
+            <div className="card mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-medium text-sm">Map Columns</span>
+                <button
+                  type="button"
+                  className="text-xs text-accent hover:underline"
+                  onClick={() => setColumnMapping(buildAutoMapping(headers))}
+                >
+                  Reset to auto-detected
+                </button>
+              </div>
+              <p className="text-xs text-ink-faint mb-3">
+                Confirm which column in {fileName} corresponds to each field below — auto-matched where the header
+                name is recognized. Leave one set to "—" to skip that field entirely.
               </p>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    name="dateFormat"
-                    checked={dateFormat === "MDY"}
-                    onChange={() => setDateFormat("MDY")}
-                  />
-                  MM/DD/YYYY
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    name="dateFormat"
-                    checked={dateFormat === "DMY"}
-                    onChange={() => setDateFormat("DMY")}
-                  />
-                  DD/MM/YYYY
-                </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                {sections.map((section) => (
+                  <div key={section.title}>
+                    <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-1.5">
+                      {section.title}
+                    </h3>
+                    <div className="flex flex-col gap-1.5">
+                      {section.fields.map((f) => (
+                        <label key={f.key} className="flex items-center gap-2 text-sm">
+                          <span className="w-36 shrink-0 truncate" title={f.label}>
+                            {f.label}
+                          </span>
+                          <select
+                            className="input !w-auto flex-1 py-1"
+                            value={columnMapping[f.key] ?? ""}
+                            onChange={(e) => setMappingFor(f.key, e.target.value)}
+                          >
+                            <option value="">—</option>
+                            {headers.map((h) => (
+                              <option key={h} value={h}>
+                                {h}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 text-sm border-t border-border pt-3">
+                <span className="font-medium">Date format in this file</span>
+                <p className="text-xs text-ink-faint mb-1">
+                  Applies to every mapped date column. A date like 03/05/2024 is ambiguous by itself — pick
+                  whichever order this file actually uses.
+                </p>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="dateFormat"
+                      checked={dateFormat === "MDY"}
+                      onChange={() => setDateFormat("MDY")}
+                    />
+                    MM/DD/YYYY
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name="dateFormat"
+                      checked={dateFormat === "DMY"}
+                      onChange={() => setDateFormat("DMY")}
+                    />
+                    DD/MM/YYYY
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {mode === "create" && createRows && (
             <>
@@ -454,7 +637,7 @@ export function EmployeeImportPage() {
                 {errorCount > 0 && (
                   <p className="text-red-600">
                     {errorCount} row{errorCount === 1 ? "" : "s"} can't be imported (missing required fields) — fix
-                    them in the CSV and re-upload. Nothing will be imported while any row has an error.
+                    the mapping (or the CSV) above. Nothing will be imported while any row has an error.
                   </p>
                 )}
                 {warningCount > 0 && (
