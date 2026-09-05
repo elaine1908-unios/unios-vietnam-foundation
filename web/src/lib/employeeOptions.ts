@@ -1,0 +1,75 @@
+// Preset option lists for Employee Master fields with a clean, closed set of
+// values in the real HR data (see "Employee Information _ Thông tin nhân
+// viên.csv") — shared between the manual New/Edit form and the CSV import
+// preview so both present the same choices.
+//
+// Nationality and Relationship are deliberately NOT closed dropdowns here:
+// both showed real, open-ended variation even in a 98-row sample (a Dutch
+// and an Australian nationality; relationship terms mixing Vietnamese,
+// English, and at least one typo), so forcing a fixed list would block
+// legitimate future entries. Department/Position/Rank are handled
+// separately via the Career Map link, not here.
+
+export const OFFICE_LOCATIONS = [
+  "Unios Chelsea (Hanoi)",
+  "Unios HEC (HCMC)",
+  "Unios Cityview (HCMC)",
+  "Unios Warehouse (Tay Ninh)",
+];
+
+// Official bank code — full name list (supersedes the earlier CSV-observed
+// subset), covering all major Vietnamese banks rather than just the ones
+// that happened to appear in the initial 98-employee sample.
+export const BANK_NAMES = [
+  "ABB – ABBank",
+  "ACB – ACB",
+  "AGR – Agribank",
+  "ANZ – ANZ Việt Nam",
+  "BIDV – BIDV",
+  "BVB – BaoVietBank",
+  "CIMB – CIMB Việt Nam",
+  "CTG – VietinBank",
+  "EIB – Eximbank",
+  "HDB – HDBank",
+  "HLBVN – Hong Leong Bank Việt Nam",
+  "HSBC – HSBC Việt Nam",
+  "IVB – Indovina Bank",
+  "KLB – Kienlongbank",
+  "LPB – LPBank",
+  "MB – MBBank",
+  "MSB – MSB",
+  "NAB – Nam A Bank",
+  "NCB – NCB",
+  "OCB – OCB",
+  "PBVN – Public Bank Việt Nam",
+  "PGB – PGBank",
+  "SCB – Standard Chartered VN",
+  "SEAB – SeABank",
+  "SGB – Saigonbank",
+  "SHB – SHB",
+  "SHBVN – Shinhan Bank Việt Nam",
+  "STB – Sacombank",
+  "TCB – Techcombank",
+  "TPB – TPBank",
+  "UOB – UOB Việt Nam",
+  "VAB – VietABank",
+  "VBB – VietBank",
+  "VCB – Vietcombank",
+  "VIB – VIB",
+  "VPB – VPBank",
+  "VRB – VietNga",
+  "WOO – Woori Bank Việt Nam",
+];
+
+export const GENDERS = ["Nam / Male", "Nữ / Female"];
+
+export const MARITAL_STATUSES = [
+  "Đã kết hôn / Married",
+  "Chưa kết hôn / Single",
+  "Đã ly dị / Divorced",
+  "In a relationship",
+];
+
+// Registration status for social/health insurance — not a provider or plan
+// name, despite the field's generic-sounding label.
+export const HEALTH_INSURANCE_STATUSES = ["Đã đăng ký", "Chưa đến hạn đăng ký"];

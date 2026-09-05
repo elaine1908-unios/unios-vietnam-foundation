@@ -83,6 +83,10 @@ export interface ProfileSummary {
 // ProfileDetail (which are per-ROLE, not per-person). Owner-only.
 export interface EmployeeSummary {
   id: string;
+  // Human-facing identifier (e.g. "UV-0001") — auto-assigned by the server,
+  // never editable. Distinct from `id`, which is only ever used internally
+  // (URLs, foreign keys).
+  employee_code: string | null;
   last_name: string;
   middle_name: string | null;
   first_name: string;
@@ -93,6 +97,7 @@ export interface EmployeeSummary {
 
 export interface EmployeeDetail {
   id: string;
+  employee_code: string | null;
   work_email: string | null;
   last_name: string;
   middle_name: string | null;
@@ -134,7 +139,10 @@ export interface EmployeeDetail {
   updated_at: string;
 }
 
-export type EmployeeInput = Omit<EmployeeDetail, "id" | "is_archived" | "created_at" | "updated_at" | "career_map_role">;
+export type EmployeeInput = Omit<
+  EmployeeDetail,
+  "id" | "employee_code" | "is_archived" | "created_at" | "updated_at" | "career_map_role"
+>;
 
 export interface AuditLogEntry {
   id: string;

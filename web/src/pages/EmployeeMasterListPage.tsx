@@ -5,9 +5,10 @@ import { api } from "../lib/api";
 import type { EmployeeSummary } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 
-type SortKey = "name" | "department" | "is_archived";
+type SortKey = "employee_code" | "name" | "department" | "is_archived";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "employee_code", label: "Employee ID" },
   { key: "name", label: "Name" },
   { key: "department", label: "Department" },
   { key: "is_archived", label: "Status" },
@@ -36,8 +37,10 @@ export function EmployeeMasterListPage() {
         const cmp = Number(a.is_archived) - Number(b.is_archived);
         return sortDir === "asc" ? cmp : -cmp;
       }
-      const av = (sortKey === "name" ? displayName(a) : a.department ?? "").toLowerCase();
-      const bv = (sortKey === "name" ? displayName(b) : b.department ?? "").toLowerCase();
+      const pick = (e: EmployeeSummary) =>
+        sortKey === "name" ? displayName(e) : sortKey === "employee_code" ? e.employee_code ?? "" : e.department ?? "";
+      const av = pick(a).toLowerCase();
+      const bv = pick(b).toLowerCase();
       const cmp = av.localeCompare(bv);
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -58,9 +61,14 @@ export function EmployeeMasterListPage() {
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Employee Master</h1>
         {canCreate && (
-          <Link to="/employees/new" className="btn-primary">
-            New employee
-          </Link>
+          <div className="flex gap-2">
+            <Link to="/employees/import" className="btn-secondary">
+              Import employees
+            </Link>
+            <Link to="/employees/new" className="btn-primary">
+              New employee
+            </Link>
+          </div>
         )}
       </div>
       <p className="text-sm text-ink-muted mb-4">
@@ -107,6 +115,7 @@ export function EmployeeMasterListPage() {
             <tbody>
               {rows.map((e) => (
                 <tr key={e.id} className="border-b border-border last:border-0 hover:bg-surface-2">
+                  <td className="px-4 py-2 font-mono text-xs text-ink-muted">{e.employee_code || "—"}</td>
                   <td className="px-4 py-2">
                     <Link to={`/employees/${e.id}`} className="text-accent font-medium hover:underline">
                       {displayName(e)}

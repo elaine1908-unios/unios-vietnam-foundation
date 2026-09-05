@@ -67,6 +67,7 @@ export function EmployeeDetailPage() {
             {displayName}
             {e.english_name && <span className="text-ink-faint font-normal"> ({e.english_name})</span>}
           </h1>
+          {e.employee_code && <p className="font-mono text-xs text-ink-faint mt-0.5">{e.employee_code}</p>}
           <div className="flex gap-2 mt-1">
             {e.is_archived ? (
               <span className="text-xs rounded bg-surface-2 border border-border px-1.5 py-0.5 text-ink-faint">
@@ -95,6 +96,7 @@ export function EmployeeDetailPage() {
 
       <Section title="Work Information">
         <InfoRow label="Work Email" value={e.work_email} />
+        <InfoRow label="Phone No." value={e.phone_no} />
         <InfoRow label="Department" value={e.department} />
         <InfoRow label="Position" value={e.position} />
         <InfoRow label="Rank" value={e.rank} />
@@ -121,7 +123,6 @@ export function EmployeeDetailPage() {
         <InfoRow label="Marital Status" value={e.marital_status} />
         <InfoRow label="Birthday" value={e.birthday} />
         <InfoRow label="Nationality" value={e.nationality} />
-        <InfoRow label="Phone No." value={e.phone_no} />
       </Section>
 
       <Section title="Identification">

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../db.js";
+import { db, transaction } from "../db.js";
 import { newId } from "../ids.js";
 import { requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
@@ -65,6 +65,63 @@ function resolveCareerMapRoleId(rawId: string | null | undefined): string | null
   return exists ? rawId : "invalid";
 }
 
+// UV-<initials>-<MMYY> — e.g. "UV-TT-1121" for a "Tam Tran"-shaped name
+// hired November 2021. Computed ONCE at creation from that moment's
+// name/commencement_date and never recomputed — like the old sequential
+// version, it's an identifier, not a live-derived display value, so
+// correcting a typo in someone's name later doesn't change their ID.
+//
+// Vietnamese names carry diacritics (Ư, Đ, ...) that don't belong in a
+// short, universally-typeable code, so the initial is taken from the
+// diacritic-stripped form.
+function stripDiacritics(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+function initialOf(name: string | null | undefined): string {
+  const letter = stripDiacritics((name ?? "").trim()).charAt(0);
+  return (letter || "X").toUpperCase();
+}
+
+// Commencement date may not be known yet at creation time (it's an optional
+// field) — falls back to today's date rather than leaving the code's date
+// segment blank or invalid.
+function monthYear(dateStr: string | null | undefined): string {
+  const parsed = dateStr ? new Date(dateStr) : null;
+  const d = parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${mm}${yy}`;
+}
+
+// Two employees can easily share both initials and hire month (real HR data
+// already does — see e.g. a batch of hires all starting "6/3/2024") — a
+// numeric suffix on the INITIALS segment disambiguates rather than
+// silently colliding on the unique index: 1st = "UV-DN-0624", 2nd =
+// "UV-DN2-0624", 3rd = "UV-DN3-0624". Initials are always exactly 2
+// letters by construction, so a LIKE match on "UV-<initials>%-<date>" can
+// only ever pick up that numeric suffix, never a different person's code.
+// Same run-inside-a-transaction safety as before: each INSERT is visible
+// to the next row's SELECT within a bulk import.
+function generateEmployeeCode(
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+  commencementDate: string | null | undefined,
+): string {
+  const initials = `${initialOf(firstName)}${initialOf(lastName)}`;
+  const date = monthYear(commencementDate);
+  const count = (
+    db.prepare("SELECT COUNT(*) as n FROM employees WHERE employee_code LIKE ?").get(`UV-${initials}%-${date}`) as {
+      n: number;
+    }
+  ).n;
+  return count === 0 ? `UV-${initials}-${date}` : `UV-${initials}${count + 1}-${date}`;
+}
+
 function loadDetail(id: string) {
   const row = db.prepare("SELECT * FROM employees WHERE id = ?").get(id) as Record<string, unknown> | undefined;
   if (!row) return undefined;
@@ -94,7 +151,7 @@ employeesRouter.get("/", (req, res) => {
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const rows = db
     .prepare(
-      `SELECT id, last_name, middle_name, first_name, english_name, department, is_archived
+      `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, is_archived
        FROM employees ${where} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`,
     )
     .all(...params) as Record<string, unknown>[];
@@ -124,11 +181,69 @@ employeesRouter.post("/", requireCap("employee.create"), (req, res) => {
   }
   const id = newId();
   const values = FIELDS.map((f) => input[f]?.toString().trim() || null);
+  const employeeCode = generateEmployeeCode(input.first_name, input.last_name, input.commencement_date);
   db.prepare(
-    `INSERT INTO employees (id, ${FIELDS.join(", ")}, career_map_role_id, created_by, updated_by) VALUES (?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?)`,
-  ).run(id, ...values, careerMapRoleId, req.user!.id, req.user!.id);
+    `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, created_by, updated_by) VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?)`,
+  ).run(id, employeeCode, ...values, careerMapRoleId, req.user!.id, req.user!.id);
   logAudit("employee", id, "created", req.user!.id);
   res.status(201).json(loadDetail(id));
+});
+
+// Bulk create from a parsed CSV (client-side parsing — see
+// EmployeeImportPage.tsx). Each row goes through the same validation as a
+// single create; unlike POST /, is_archived is settable per row (an import
+// is loading pre-existing HR history, not registering someone new — a
+// manually-created employee is always "On Going" to start). Runs as one
+// transaction: either every row commits, or none do, so a mid-import error
+// never leaves a partial batch mixed in with existing data.
+type ImportRow = EmployeeInput & { is_archived?: boolean };
+
+employeesRouter.post("/import", requireCap("employee.create"), (req, res) => {
+  const rows = (req.body?.rows ?? []) as ImportRow[];
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: "rows must be a non-empty array." });
+    return;
+  }
+  const errors: { row: number; message: string }[] = [];
+  const createdIds: string[] = [];
+  const importAll = transaction(() => {
+    rows.forEach((row, i) => {
+      const error = validate(row);
+      if (error) {
+        errors.push({ row: i, message: error });
+        return;
+      }
+      const careerMapRoleId = resolveCareerMapRoleId(row.career_map_role_id);
+      if (careerMapRoleId === "invalid") {
+        errors.push({ row: i, message: "That Career Map role no longer exists." });
+        return;
+      }
+      const id = newId();
+      const values = FIELDS.map((f) => row[f]?.toString().trim() || null);
+      const employeeCode = generateEmployeeCode(row.first_name, row.last_name, row.commencement_date);
+      db.prepare(
+        `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, is_archived, created_by, updated_by)
+         VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?)`,
+      ).run(id, employeeCode, ...values, careerMapRoleId, row.is_archived ? 1 : 0, req.user!.id, req.user!.id);
+      createdIds.push(id);
+    });
+    // Any row failing validation aborts the whole batch — an import is a
+    // single all-or-nothing action from the user's point of view (they
+    // already saw every row in the preview screen before confirming), not a
+    // best-effort partial load that would need reconciling afterward.
+    if (errors.length > 0) throw new Error("validation_failed");
+  });
+  try {
+    importAll();
+  } catch (err) {
+    if (err instanceof Error && err.message === "validation_failed") {
+      res.status(400).json({ error: "Some rows failed validation — nothing was imported.", errors });
+      return;
+    }
+    throw err;
+  }
+  for (const id of createdIds) logAudit("employee", id, "created", req.user!.id);
+  res.status(201).json({ created: createdIds.length });
 });
 
 employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {

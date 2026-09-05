@@ -5,12 +5,19 @@ import { api } from "../lib/api";
 import { groupByDivision } from "../lib/careerMap";
 import type { CareerMapRole, EmployeeDetail, EmployeeInput } from "../lib/types";
 import { CAREER_RANK_LABELS } from "../lib/types";
+import { OFFICE_LOCATIONS, BANK_NAMES, GENDERS, MARITAL_STATUSES, HEALTH_INSURANCE_STATUSES } from "../lib/employeeOptions";
 
 function roleOptionLabel(role: CareerMapRole): string {
   const prefix = role.function ? `${role.function} — ` : "";
   const archivedSuffix = role.is_archived ? " — archived" : "";
   return `${prefix}${role.role_name} (${role.rank[0].toUpperCase()})${archivedSuffix}`;
 }
+
+// Vietnam's domestic prefix — pre-filled since nearly every hire is a
+// domestic number, but plain editable text: someone entering a foreign
+// number (see e.g. a Dutch or Australian hire) just types over it.
+const DEFAULT_PHONE_PREFIX = "(084) ";
+const PHONE_PLACEHOLDER = "(084) XXX XXX XXX";
 
 const EMPTY_FORM: EmployeeInput = {
   work_email: "",
@@ -24,7 +31,7 @@ const EMPTY_FORM: EmployeeInput = {
   career_map_role_id: null,
   office_location: "",
   commencement_date: "",
-  phone_no: "",
+  phone_no: DEFAULT_PHONE_PREFIX,
   personal_tax_no: "",
   bank_account_no: "",
   bank_name: "",
@@ -40,7 +47,7 @@ const EMPTY_FORM: EmployeeInput = {
   temporary_address: "",
   emergency_contact: "",
   relationship: "",
-  contact_phone_no: "",
+  contact_phone_no: DEFAULT_PHONE_PREFIX,
   contact_address: "",
   health_insurance: "",
 };
@@ -49,15 +56,43 @@ function TextField({
   label,
   value,
   onChange,
+  placeholder,
 }: {
   label: string;
   value: string | null;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span className="font-medium">{label}</span>
+      <input className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  options: string[];
   onChange: (v: string) => void;
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="font-medium">{label}</span>
-      <input className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+      <select className="input" value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
+        <option value="">—</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
@@ -186,7 +221,18 @@ export function EmployeeEditPage() {
         <h2 className="font-display font-semibold mb-2">Work Information</h2>
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Work Email" value={form.work_email} onChange={(v) => set("work_email", v)} />
-          <TextField label="Office Location" value={form.office_location} onChange={(v) => set("office_location", v)} />
+          <TextField
+            label="Phone No."
+            value={form.phone_no}
+            onChange={(v) => set("phone_no", v)}
+            placeholder={PHONE_PLACEHOLDER}
+          />
+          <SelectField
+            label="Office Location"
+            value={form.office_location}
+            options={OFFICE_LOCATIONS}
+            onChange={(v) => set("office_location", v)}
+          />
           <DateField
             label="Commencement Date"
             value={form.commencement_date}
@@ -236,11 +282,15 @@ export function EmployeeEditPage() {
           <TextField label="Middle Name" value={form.middle_name} onChange={(v) => set("middle_name", v)} />
           <TextField label="First Name" value={form.first_name} onChange={(v) => set("first_name", v)} />
           <TextField label="English Name" value={form.english_name} onChange={(v) => set("english_name", v)} />
-          <TextField label="Gender" value={form.gender} onChange={(v) => set("gender", v)} />
-          <TextField label="Marital Status" value={form.marital_status} onChange={(v) => set("marital_status", v)} />
+          <SelectField label="Gender" value={form.gender} options={GENDERS} onChange={(v) => set("gender", v)} />
+          <SelectField
+            label="Marital Status"
+            value={form.marital_status}
+            options={MARITAL_STATUSES}
+            onChange={(v) => set("marital_status", v)}
+          />
           <DateField label="Birthday" value={form.birthday} onChange={(v) => set("birthday", v)} />
           <TextField label="Nationality" value={form.nationality} onChange={(v) => set("nationality", v)} />
-          <TextField label="Phone No." value={form.phone_no} onChange={(v) => set("phone_no", v)} />
         </div>
       </div>
 
@@ -259,8 +309,13 @@ export function EmployeeEditPage() {
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Personal Tax No." value={form.personal_tax_no} onChange={(v) => set("personal_tax_no", v)} />
           <TextField label="Bank Account No." value={form.bank_account_no} onChange={(v) => set("bank_account_no", v)} />
-          <TextField label="Bank Name" value={form.bank_name} onChange={(v) => set("bank_name", v)} />
-          <TextField label="Health Insurance" value={form.health_insurance} onChange={(v) => set("health_insurance", v)} />
+          <SelectField label="Bank Name" value={form.bank_name} options={BANK_NAMES} onChange={(v) => set("bank_name", v)} />
+          <SelectField
+            label="Health Insurance"
+            value={form.health_insurance}
+            options={HEALTH_INSURANCE_STATUSES}
+            onChange={(v) => set("health_insurance", v)}
+          />
         </div>
       </div>
 
@@ -277,7 +332,12 @@ export function EmployeeEditPage() {
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Emergency Contact" value={form.emergency_contact} onChange={(v) => set("emergency_contact", v)} />
           <TextField label="Relationship" value={form.relationship} onChange={(v) => set("relationship", v)} />
-          <TextField label="Contact Phone No." value={form.contact_phone_no} onChange={(v) => set("contact_phone_no", v)} />
+          <TextField
+            label="Contact Phone No."
+            value={form.contact_phone_no}
+            onChange={(v) => set("contact_phone_no", v)}
+            placeholder={PHONE_PLACEHOLDER}
+          />
           <TextAreaField label="Contact Address" value={form.contact_address} onChange={(v) => set("contact_address", v)} />
         </div>
       </div>

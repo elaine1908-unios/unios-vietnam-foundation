@@ -14,6 +14,7 @@ import { AuditLogPage } from "./pages/AuditLogPage";
 import { EmployeeMasterListPage } from "./pages/EmployeeMasterListPage";
 import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
 import { EmployeeEditPage } from "./pages/EmployeeEditPage";
+import { EmployeeImportPage } from "./pages/EmployeeImportPage";
 import { CareerMapPage } from "./pages/CareerMapPage";
 import { JobDescriptionsListPage } from "./pages/JobDescriptionsListPage";
 import { JobDescriptionDetailPage } from "./pages/JobDescriptionDetailPage";
@@ -93,6 +94,14 @@ export function App() {
                 element={
                   <RequireAuth cap="employee.create">
                     <EmployeeEditPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/employees/import"
+                element={
+                  <RequireAuth cap="employee.create">
+                    <EmployeeImportPage />
                   </RequireAuth>
                 }
               />
