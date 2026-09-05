@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Papa from "papaparse";
 import { api } from "../lib/api";
@@ -26,21 +26,35 @@ function looksCorrupted(value: string | undefined): boolean {
   return /^\d(\.\d+)?e\+\d+$/i.test(value.trim());
 }
 
-// The source file's dates are US-style M/D/Y (confirmed by rows with a day
-// > 12, which rules out D/M/Y) — converted to the ISO format the app's
-// <input type="date"> fields expect.
-function parseUsDate(raw: string | undefined): string | null {
+// A slash-separated date can't be told apart as MM/DD/YYYY vs DD/MM/YYYY
+// from its digits alone (e.g. "03/05/2024" is ambiguous either way) — the
+// export's actual convention depends on the machine/locale that produced
+// it, so the user picks it once per import rather than the app guessing.
+export type DateFormat = "MDY" | "DMY";
+
+interface ParsedDate {
+  value: string | null;
+  invalid: boolean;
+}
+
+function parseDate(raw: string | undefined, format: DateFormat): ParsedDate {
   const m = raw?.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
-  const [, month, day, year] = m;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  if (!m) return { value: null, invalid: false };
+  const [, a, b, year] = m;
+  const month = format === "MDY" ? a : b;
+  const day = format === "MDY" ? b : a;
+  const invalid = Number(month) < 1 || Number(month) > 12 || Number(day) < 1 || Number(day) > 31;
+  // Don't hand back a malformed value (e.g. month "13") for a date that
+  // failed validation — the row still imports (see warnings), but the date
+  // field itself is left blank rather than storing something unparseable.
+  return { value: invalid ? null : `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`, invalid };
 }
 
 function field(raw: Record<string, string>, key: string): string | null {
   return raw[key]?.trim() || null;
 }
 
-function mapRow(raw: Record<string, string>): ParsedRow {
+function mapRow(raw: Record<string, string>, dateFormat: DateFormat): ParsedRow {
   const errors: string[] = [];
   const warnings: string[] = [];
   const lastName = field(raw, "Last Name");
@@ -57,6 +71,13 @@ function mapRow(raw: Record<string, string>): ParsedRow {
     warnings.push("Contact Phone No. looks corrupted by Excel (scientific notation) — original digits are likely lost");
   }
 
+  const commencementDate = parseDate(raw["Commencement Date"], dateFormat);
+  const birthday = parseDate(raw["Birthday"], dateFormat);
+  const issuedDate = parseDate(raw["Issued Date"], dateFormat);
+  if (commencementDate.invalid) warnings.push(`Commencement Date "${raw["Commencement Date"]}" isn't a valid date in the selected format`);
+  if (birthday.invalid) warnings.push(`Birthday "${raw["Birthday"]}" isn't a valid date in the selected format`);
+  if (issuedDate.invalid) warnings.push(`Issued Date "${raw["Issued Date"]}" isn't a valid date in the selected format`);
+
   const mapped: ImportRow = {
     work_email: field(raw, "Work Email"),
     last_name: lastName ?? "",
@@ -68,16 +89,16 @@ function mapRow(raw: Record<string, string>): ParsedRow {
     rank: null,
     career_map_role_id: null,
     office_location: field(raw, "Office Location"),
-    commencement_date: parseUsDate(raw["Commencement Date"]),
+    commencement_date: commencementDate.value,
     phone_no: phone,
     personal_tax_no: field(raw, "Personal Tax No."),
     bank_account_no: field(raw, "Bank Account No."),
     bank_name: field(raw, "Bank Name"),
     gender: field(raw, "Gender"),
     marital_status: field(raw, "Marital Status"),
-    birthday: parseUsDate(raw["Birthday"]),
+    birthday: birthday.value,
     id_no: field(raw, "ID No."),
-    issued_date: parseUsDate(raw["Issued Date"]),
+    issued_date: issuedDate.value,
     passport_no: field(raw, "Passport No."),
     nationality: field(raw, "Nationality"),
     permanent_address: field(raw, "Permanent Address"),
@@ -94,11 +115,20 @@ function mapRow(raw: Record<string, string>): ParsedRow {
 export function EmployeeImportPage() {
   const navigate = useNavigate();
   const [fileName, setFileName] = useState("");
-  const [rows, setRows] = useState<ParsedRow[] | null>(null);
+  const [rawRows, setRawRows] = useState<Record<string, string>[] | null>(null);
+  const [dateFormat, setDateFormat] = useState<DateFormat>("MDY");
   const [parseError, setParseError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
+
+  // Re-mapped whenever the date format toggle changes, not just on upload —
+  // so switching MM/DD <-> DD/MM re-evaluates every date without needing to
+  // re-upload the file.
+  const rows = useMemo<ParsedRow[] | null>(
+    () => rawRows?.map((r) => mapRow(r, dateFormat)) ?? null,
+    [rawRows, dateFormat],
+  );
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -114,10 +144,10 @@ export function EmployeeImportPage() {
       complete: (results) => {
         if (results.errors.length > 0) {
           setParseError(results.errors[0].message);
-          setRows(null);
+          setRawRows(null);
           return;
         }
-        setRows(results.data.map(mapRow));
+        setRawRows(results.data);
       },
       error: (err) => setParseError(err.message),
     });
@@ -168,6 +198,34 @@ export function EmployeeImportPage() {
               <input className="input" type="file" accept=".csv" onChange={handleFile} />
             </label>
             {parseError && <p className="text-sm text-red-600 mt-2">Couldn't parse this file: {parseError}</p>}
+
+            <div className="mt-3 text-sm">
+              <span className="font-medium">Date format in this file</span>
+              <p className="text-xs text-ink-faint mb-1">
+                Applies to Commencement Date, Birthday, and Issued Date. A date like 03/05/2024 is ambiguous by
+                itself — pick whichever order this file actually uses.
+              </p>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="dateFormat"
+                    checked={dateFormat === "MDY"}
+                    onChange={() => setDateFormat("MDY")}
+                  />
+                  MM/DD/YYYY
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="dateFormat"
+                    checked={dateFormat === "DMY"}
+                    onChange={() => setDateFormat("DMY")}
+                  />
+                  DD/MM/YYYY
+                </label>
+              </div>
+            </div>
           </div>
 
           {rows && (
