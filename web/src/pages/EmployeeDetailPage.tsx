@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import type { EmployeeDetail } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
+import { employeeDisplayName } from "../lib/vietnamese";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -41,7 +42,7 @@ export function EmployeeDetailPage() {
 
   const canEdit = user?.capabilities.includes("employee.edit") ?? false;
   const canArchive = user?.capabilities.includes("employee.archive") ?? false;
-  const displayName = [e.last_name, e.middle_name, e.first_name].filter(Boolean).join(" ");
+  const displayName = employeeDisplayName(e);
 
   async function handleArchiveToggle() {
     setArchiving(true);
@@ -63,10 +64,7 @@ export function EmployeeDetailPage() {
           <Link to="/employees" className="text-sm text-accent hover:underline">
             ← Employee Master
           </Link>
-          <h1 className="font-display font-bold text-xl mt-1">
-            {displayName}
-            {e.english_name && <span className="text-ink-faint font-normal"> ({e.english_name})</span>}
-          </h1>
+          <h1 className="font-display font-bold text-xl mt-1">{displayName}</h1>
           {e.employee_code && <p className="font-mono text-xs text-ink-faint mt-0.5">{e.employee_code}</p>}
           <div className="flex gap-2 mt-1">
             {e.is_archived ? (
@@ -128,7 +126,6 @@ export function EmployeeDetailPage() {
       <Section title="Identification">
         <InfoRow label="ID No." value={e.id_no} />
         <InfoRow label="Issued Date" value={e.issued_date} />
-        <InfoRow label="Issued At" value={e.issued_at} />
         <InfoRow label="Passport No." value={e.passport_no} />
       </Section>
 

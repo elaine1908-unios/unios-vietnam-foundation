@@ -40,7 +40,6 @@ const EMPTY_FORM: EmployeeInput = {
   birthday: "",
   id_no: "",
   issued_date: "",
-  issued_at: "",
   passport_no: "",
   nationality: "",
   permanent_address: "",
@@ -299,7 +298,6 @@ export function EmployeeEditPage() {
         <div className="grid grid-cols-2 gap-3">
           <TextField label="ID No." value={form.id_no} onChange={(v) => set("id_no", v)} />
           <DateField label="Issued Date" value={form.issued_date} onChange={(v) => set("issued_date", v)} />
-          <TextField label="Issued At" value={form.issued_at} onChange={(v) => set("issued_at", v)} />
           <TextField label="Passport No." value={form.passport_no} onChange={(v) => set("passport_no", v)} />
         </div>
       </div>

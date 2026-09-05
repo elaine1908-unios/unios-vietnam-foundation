@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import Papa from "papaparse";
 import { api } from "../lib/api";
 import type { EmployeeInput } from "../lib/types";
+import { employeeDisplayName } from "../lib/vietnamese";
 
 // Column headers as they appear in the real HR export ("Employee Information
 // _ Thông tin nhân viên.csv") — trimmed via Papa's transformHeader, since a
@@ -77,7 +78,6 @@ function mapRow(raw: Record<string, string>): ParsedRow {
     birthday: parseUsDate(raw["Birthday"]),
     id_no: field(raw, "ID No."),
     issued_date: parseUsDate(raw["Issued Date"]),
-    issued_at: field(raw, "Issued At"),
     passport_no: field(raw, "Passport No."),
     nationality: field(raw, "Nationality"),
     permanent_address: field(raw, "Permanent Address"),
@@ -90,10 +90,6 @@ function mapRow(raw: Record<string, string>): ParsedRow {
     is_archived: raw["Archived"]?.trim().toLowerCase() === "archived",
   };
   return { mapped, errors, warnings };
-}
-
-function displayName(r: ImportRow): string {
-  return [r.last_name, r.middle_name, r.first_name].filter(Boolean).join(" ");
 }
 
 export function EmployeeImportPage() {
@@ -213,7 +209,7 @@ export function EmployeeImportPage() {
                         key={i}
                         className={`border-b border-border last:border-0 ${r.errors.length > 0 ? "bg-red-50" : ""}`}
                       >
-                        <td className="px-4 py-2">{displayName(r.mapped) || "—"}</td>
+                        <td className="px-4 py-2">{employeeDisplayName(r.mapped) || "—"}</td>
                         <td className="px-4 py-2 text-ink-muted">{r.mapped.department || "—"}</td>
                         <td className="px-4 py-2 text-ink-muted">{r.mapped.position || "—"}</td>
                         <td className="px-4 py-2 text-ink-muted">{r.mapped.office_location || "—"}</td>

@@ -118,7 +118,6 @@ export interface EmployeeDetail {
   birthday: string | null;
   id_no: string | null;
   issued_date: string | null;
-  issued_at: string | null;
   passport_no: string | null;
   nationality: string | null;
   permanent_address: string | null;

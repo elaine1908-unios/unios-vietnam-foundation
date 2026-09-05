@@ -31,7 +31,6 @@ const FIELDS = [
   "birthday",
   "id_no",
   "issued_date",
-  "issued_at",
   "passport_no",
   "nationality",
   "permanent_address",
