@@ -6,9 +6,18 @@ import { ACCESS_LEVEL_LABELS } from "../lib/types";
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-3 py-2 text-sm ${isActive ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"}`;
 
+// Header buttons (User Management, Audit Log) — a bordered "chip" style
+// distinct from the sidebar's flat nav links, matching po-so-tracker's own
+// header-button treatment for the same kind of admin-only, out-of-flow pages.
+const headerBtnClass = ({ isActive }: { isActive: boolean }) =>
+  `rounded-md border px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
+    isActive ? "border-accent bg-accent-soft text-accent font-medium" : "border-border text-ink-muted hover:text-ink hover:bg-surface-2"
+  }`;
+
 export function AppLayout() {
   const { user, signOut } = useAuth();
   const canAdminUsers = user?.capabilities.includes("user.admin") ?? false;
+  const canViewEmployees = user?.capabilities.includes("employee.view") ?? false;
 
   return (
     <div className="min-h-screen flex">
@@ -29,24 +38,26 @@ export function AppLayout() {
           <NavLink to="/career-map" className={navLinkClass}>
             Career Map
           </NavLink>
-          {canAdminUsers && (
-            <NavLink to="/users" className={navLinkClass}>
-              User Management
+          {canViewEmployees && (
+            <NavLink to="/employees" className={navLinkClass}>
+              Employee Master
             </NavLink>
           )}
-          {canAdminUsers && (
-            <NavLink to="/audit-log" className={navLinkClass}>
-              Audit Log
-            </NavLink>
-          )}
-          <NavLink to="/account" className={navLinkClass}>
-            My Account
-          </NavLink>
         </nav>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-border px-6 py-3 flex items-center justify-between gap-4">
+        <header className="border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
+          {canAdminUsers && (
+            <NavLink to="/users" className={headerBtnClass}>
+              User Management
+            </NavLink>
+          )}
+          {canAdminUsers && (
+            <NavLink to="/audit-log" className={headerBtnClass}>
+              Audit Log
+            </NavLink>
+          )}
           <span className="flex-1" />
           <Link
             to="/careers"
@@ -55,7 +66,10 @@ export function AppLayout() {
             To Unios Career Page
           </Link>
           <span className="text-sm text-ink-muted whitespace-nowrap">
-            Signed in as <span className="text-ink font-medium">{user?.name ?? "…"}</span>{" "}
+            Signed in as{" "}
+            <Link to="/account" className="text-ink font-medium hover:underline" title="Your name and password">
+              {user?.name ?? "…"}
+            </Link>{" "}
             <span className="font-mono text-xs text-ink-faint">
               ({user ? ACCESS_LEVEL_LABELS[user.access_level] : "…"})
             </span>

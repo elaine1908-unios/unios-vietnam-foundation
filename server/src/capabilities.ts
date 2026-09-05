@@ -34,6 +34,13 @@ export const CAPABILITIES = [
   "jobdescription.edit",
   "jobdescription.archive",
   "user.admin",
+  // Employee Master — per-employee HR records (tax/bank/ID/passport
+  // numbers, addresses, health insurance). Owner-only for now, unlike
+  // profile.view/careermap.view/jobdescription.view which are universal.
+  "employee.view",
+  "employee.create",
+  "employee.edit",
+  "employee.archive",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -49,7 +56,7 @@ const ADDED_BY_LEVEL: Record<AccessLevel, Capability[]> = {
   team_member: ["profile.view", "careermap.view", "jobdescription.view"],
   team_lead: ["profile.create", "profile.edit", "profile.archive", "jobdescription.create", "jobdescription.edit", "jobdescription.archive"],
   head_of_department: ["careerrole.create", "careerrole.edit", "careerrole.archive"],
-  owner: ["user.admin"],
+  owner: ["user.admin", "employee.view", "employee.create", "employee.edit", "employee.archive"],
 };
 
 const CAPS_BY_LEVEL: Record<AccessLevel, Capability[]> = (() => {

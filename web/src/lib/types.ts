@@ -24,7 +24,11 @@ export type Capability =
   | "jobdescription.create"
   | "jobdescription.edit"
   | "jobdescription.archive"
-  | "user.admin";
+  | "user.admin"
+  | "employee.view"
+  | "employee.create"
+  | "employee.edit"
+  | "employee.archive";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 
@@ -74,6 +78,63 @@ export interface ProfileSummary {
   is_archived: boolean;
   updated_at: string;
 }
+
+// Employee Master — per-employee HR record, distinct from ProfileSummary/
+// ProfileDetail (which are per-ROLE, not per-person). Owner-only.
+export interface EmployeeSummary {
+  id: string;
+  last_name: string;
+  middle_name: string | null;
+  first_name: string;
+  english_name: string | null;
+  department: string | null;
+  is_archived: boolean;
+}
+
+export interface EmployeeDetail {
+  id: string;
+  work_email: string | null;
+  last_name: string;
+  middle_name: string | null;
+  first_name: string;
+  english_name: string | null;
+  department: string | null;
+  position: string | null;
+  rank: string | null;
+  office_location: string | null;
+  commencement_date: string | null;
+  phone_no: string | null;
+  personal_tax_no: string | null;
+  bank_account_no: string | null;
+  bank_name: string | null;
+  is_archived: boolean;
+  gender: string | null;
+  marital_status: string | null;
+  birthday: string | null;
+  id_no: string | null;
+  issued_date: string | null;
+  issued_at: string | null;
+  passport_no: string | null;
+  nationality: string | null;
+  permanent_address: string | null;
+  temporary_address: string | null;
+  emergency_contact: string | null;
+  relationship: string | null;
+  contact_phone_no: string | null;
+  contact_address: string | null;
+  health_insurance: string | null;
+  // Department/Position/Rank are set only by picking a Career Map role
+  // (dropdown, not free text) — this is the traceability link, same pattern
+  // as ProfileDetail.career_map_role_id: department/position/rank are saved,
+  // independent snapshots that don't retroactively change if the role is
+  // later renamed on the Career Map.
+  career_map_role_id: string | null;
+  career_map_role: CareerMapRole | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EmployeeInput = Omit<EmployeeDetail, "id" | "is_archived" | "created_at" | "updated_at" | "career_map_role">;
 
 export interface AuditLogEntry {
   id: string;

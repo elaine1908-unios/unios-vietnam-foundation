@@ -8,6 +8,7 @@ const ENTITY_TYPES = [
   { value: "job_profile", label: "Job Profiles" },
   { value: "career_map_role", label: "Career Map" },
   { value: "job_description", label: "Job Descriptions" },
+  { value: "employee", label: "Employee Master" },
   { value: "user", label: "Users" },
 ];
 

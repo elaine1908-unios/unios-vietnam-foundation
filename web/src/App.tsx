@@ -11,6 +11,9 @@ import { ProfileDetailPage } from "./pages/ProfileDetailPage";
 import { ProfileEditPage } from "./pages/ProfileEditPage";
 import { UserManagementPage } from "./pages/UserManagementPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
+import { EmployeeMasterListPage } from "./pages/EmployeeMasterListPage";
+import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
+import { EmployeeEditPage } from "./pages/EmployeeEditPage";
 import { CareerMapPage } from "./pages/CareerMapPage";
 import { JobDescriptionsListPage } from "./pages/JobDescriptionsListPage";
 import { JobDescriptionDetailPage } from "./pages/JobDescriptionDetailPage";
@@ -74,6 +77,38 @@ export function App() {
                 element={
                   <RequireAuth cap="user.admin">
                     <AuditLogPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/employees"
+                element={
+                  <RequireAuth cap="employee.view">
+                    <EmployeeMasterListPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/employees/new"
+                element={
+                  <RequireAuth cap="employee.create">
+                    <EmployeeEditPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/employees/:id"
+                element={
+                  <RequireAuth cap="employee.view">
+                    <EmployeeDetailPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/employees/:id/edit"
+                element={
+                  <RequireAuth cap="employee.edit">
+                    <EmployeeEditPage />
                   </RequireAuth>
                 }
               />
