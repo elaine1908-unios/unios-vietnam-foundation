@@ -95,6 +95,17 @@ export interface EmployeeSummary {
   is_archived: boolean;
 }
 
+// Minimal shape of another employee, as referenced by report_to_employee —
+// just enough to render a name and link to their record.
+export interface EmployeeRef {
+  id: string;
+  employee_code: string | null;
+  last_name: string;
+  middle_name: string | null;
+  first_name: string;
+  english_name: string | null;
+}
+
 export interface EmployeeDetail {
   id: string;
   employee_code: string | null;
@@ -133,13 +144,17 @@ export interface EmployeeDetail {
   // later renamed on the Career Map.
   career_map_role_id: string | null;
   career_map_role: CareerMapRole | null;
+  // Who this employee reports to — a link to another employee row (dropdown
+  // only, not free text), same reasoning as career_map_role_id above.
+  report_to_employee_id: string | null;
+  report_to_employee: EmployeeRef | null;
   created_at: string;
   updated_at: string;
 }
 
 export type EmployeeInput = Omit<
   EmployeeDetail,
-  "id" | "employee_code" | "is_archived" | "created_at" | "updated_at" | "career_map_role"
+  "id" | "employee_code" | "is_archived" | "created_at" | "updated_at" | "career_map_role" | "report_to_employee"
 >;
 
 export interface AuditLogEntry {

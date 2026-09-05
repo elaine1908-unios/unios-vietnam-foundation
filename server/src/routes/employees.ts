@@ -45,6 +45,7 @@ interface EmployeeInput {
   last_name?: string;
   first_name?: string;
   career_map_role_id?: string | null;
+  report_to_employee_id?: string | null;
   [key: string]: string | null | undefined;
 }
 
@@ -60,6 +61,18 @@ function validate(input: EmployeeInput): string | null {
 function resolveCareerMapRoleId(rawId: string | null | undefined): string | null | "invalid" {
   if (!rawId) return null;
   const exists = db.prepare("SELECT id FROM career_map_roles WHERE id = ?").get(rawId);
+  return exists ? rawId : "invalid";
+}
+
+// Same dropdown-only, traceability-link pattern as career_map_role_id, but
+// pointing at another employees row instead — so a manager change is
+// something that can't drift out of sync the way a typed name could.
+// `selfId` (only meaningful on edit — a brand-new employee has no id yet to
+// collide with) blocks picking yourself as your own manager.
+function resolveReportToId(rawId: string | null | undefined, selfId?: string): string | null | "invalid" | "self" {
+  if (!rawId) return null;
+  if (selfId && rawId === selfId) return "self";
+  const exists = db.prepare("SELECT id FROM employees WHERE id = ?").get(rawId);
   return exists ? rawId : "invalid";
 }
 
@@ -128,10 +141,16 @@ function loadDetail(id: string) {
         | Record<string, unknown>
         | undefined)
     : undefined;
+  const reportToEmployee = row.report_to_employee_id
+    ? (db
+        .prepare("SELECT id, employee_code, last_name, middle_name, first_name, english_name FROM employees WHERE id = ?")
+        .get(row.report_to_employee_id as string) as Record<string, unknown> | undefined)
+    : undefined;
   return {
     ...row,
     is_archived: Boolean(row.is_archived),
     career_map_role: careerMapRole ? { ...careerMapRole, is_archived: Boolean(careerMapRole.is_archived) } : null,
+    report_to_employee: reportToEmployee ?? null,
   };
 }
 
@@ -177,12 +196,17 @@ employeesRouter.post("/", requireCap("employee.create"), (req, res) => {
     res.status(400).json({ error: "That Career Map role no longer exists." });
     return;
   }
+  const reportToId = resolveReportToId(input.report_to_employee_id);
+  if (reportToId === "invalid") {
+    res.status(400).json({ error: "That Report To employee no longer exists." });
+    return;
+  }
   const id = newId();
   const values = FIELDS.map((f) => input[f]?.toString().trim() || null);
   const employeeCode = generateEmployeeCode(input.first_name, input.last_name, input.commencement_date);
   db.prepare(
-    `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, created_by, updated_by) VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?)`,
-  ).run(id, employeeCode, ...values, careerMapRoleId, req.user!.id, req.user!.id);
+    `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, created_by, updated_by) VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?)`,
+  ).run(id, employeeCode, ...values, careerMapRoleId, reportToId, req.user!.id, req.user!.id);
   logAudit("employee", id, "created", req.user!.id);
   res.status(201).json(loadDetail(id));
 });
@@ -216,13 +240,16 @@ employeesRouter.post("/import", requireCap("employee.create"), (req, res) => {
         errors.push({ row: i, message: "That Career Map role no longer exists." });
         return;
       }
+      // Report To isn't part of the CSV mapping (see EmployeeImportPage.tsx)
+      // — set manually per employee afterward, same as Department/Position
+      // used to be before the Career Map link existed.
       const id = newId();
       const values = FIELDS.map((f) => row[f]?.toString().trim() || null);
       const employeeCode = generateEmployeeCode(row.first_name, row.last_name, row.commencement_date);
       db.prepare(
-        `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, is_archived, created_by, updated_by)
-         VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?)`,
-      ).run(id, employeeCode, ...values, careerMapRoleId, row.is_archived ? 1 : 0, req.user!.id, req.user!.id);
+        `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, is_archived, created_by, updated_by)
+         VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?)`,
+      ).run(id, employeeCode, ...values, careerMapRoleId, null, row.is_archived ? 1 : 0, req.user!.id, req.user!.id);
       createdIds.push(id);
     });
     // Any row failing validation aborts the whole batch — an import is a
@@ -261,12 +288,21 @@ employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {
     res.status(400).json({ error: "That Career Map role no longer exists." });
     return;
   }
+  const reportToId = resolveReportToId(input.report_to_employee_id, req.params.id);
+  if (reportToId === "invalid") {
+    res.status(400).json({ error: "That Report To employee no longer exists." });
+    return;
+  }
+  if (reportToId === "self") {
+    res.status(400).json({ error: "An employee can't report to themselves." });
+    return;
+  }
   const values = FIELDS.map((f) => input[f]?.toString().trim() || null);
   db.prepare(
-    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(...values, careerMapRoleId, req.user!.id, req.params.id);
+    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).run(...values, careerMapRoleId, reportToId, req.user!.id, req.params.id);
   const updated = loadDetail(req.params.id)!;
-  diffAndLog("employee", req.params.id, existing, updated, [...FIELDS, "career_map_role_id"], req.user!.id);
+  diffAndLog("employee", req.params.id, existing, updated, [...FIELDS, "career_map_role_id", "report_to_employee_id"], req.user!.id);
   res.json(updated);
 });
 

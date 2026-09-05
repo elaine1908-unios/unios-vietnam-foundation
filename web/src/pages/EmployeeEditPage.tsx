@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { groupByDivision } from "../lib/careerMap";
-import type { CareerMapRole, EmployeeDetail, EmployeeInput } from "../lib/types";
+import type { CareerMapRole, EmployeeDetail, EmployeeInput, EmployeeSummary } from "../lib/types";
 import { CAREER_RANK_LABELS } from "../lib/types";
 import {
   OFFICE_LOCATIONS,
@@ -14,6 +14,7 @@ import {
   DEFAULT_PHONE_PREFIX,
   PHONE_PLACEHOLDER,
 } from "../lib/employeeOptions";
+import { employeeDisplayName } from "../lib/vietnamese";
 
 function roleOptionLabel(role: CareerMapRole): string {
   const prefix = role.function ? `${role.function} — ` : "";
@@ -31,6 +32,7 @@ const EMPTY_FORM: EmployeeInput = {
   position: "",
   rank: "",
   career_map_role_id: null,
+  report_to_employee_id: null,
   office_location: "",
   commencement_date: "",
   phone_no: DEFAULT_PHONE_PREFIX,
@@ -140,10 +142,16 @@ export function EmployeeEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missingLinkedRole, setMissingLinkedRole] = useState<CareerMapRole | null>(null);
+  const [missingReportTo, setMissingReportTo] = useState<EmployeeSummary | null>(null);
 
   const { data: roles = [] } = useQuery({
     queryKey: ["career-map"],
     queryFn: () => api.get<CareerMapRole[]>("/career-map"),
+  });
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees"],
+    queryFn: () => api.get<EmployeeSummary[]>("/employees"),
   });
 
   useEffect(() => {
@@ -173,7 +181,33 @@ export function EmployeeEditPage() {
       .catch(() => setMissingLinkedRole(null));
   }, [form.career_map_role_id, roles]);
 
+  // If the linked manager was later archived, they're excluded from the
+  // default /employees list — same fallback fetch as missingLinkedRole
+  // above, so the dropdown still shows them as the selected option instead
+  // of silently landing on nothing.
+  useEffect(() => {
+    if (!form.report_to_employee_id) {
+      setMissingReportTo(null);
+      return;
+    }
+    if (employees.some((e) => e.id === form.report_to_employee_id)) {
+      setMissingReportTo(null);
+      return;
+    }
+    api
+      .get<EmployeeSummary>(`/employees/${form.report_to_employee_id}`)
+      .then(setMissingReportTo)
+      .catch(() => setMissingReportTo(null));
+  }, [form.report_to_employee_id, employees]);
+
   const allRoles = missingLinkedRole ? [...roles, missingLinkedRole] : roles;
+  // Can't report to yourself — excluded from the options outright rather
+  // than just blocked on save.
+  const reportToOptions = employees.filter((e) => e.id !== id);
+  const allReportToOptions =
+    missingReportTo && !reportToOptions.some((e) => e.id === missingReportTo.id)
+      ? [...reportToOptions, missingReportTo]
+      : reportToOptions;
 
   if (loading) return <p className="text-sm text-ink-muted">Loading…</p>;
 
@@ -191,6 +225,10 @@ export function EmployeeEditPage() {
       position: role.role_name,
       rank: CAREER_RANK_LABELS[role.rank],
     }));
+  }
+
+  function handleReportToSelect(employeeId: string) {
+    setForm((f) => ({ ...f, report_to_employee_id: employeeId || null }));
   }
 
   async function handleSubmit() {
@@ -238,6 +276,22 @@ export function EmployeeEditPage() {
             value={form.commencement_date}
             onChange={(v) => set("commencement_date", v)}
           />
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Report To</span>
+            <select
+              className="input"
+              value={form.report_to_employee_id ?? ""}
+              onChange={(e) => handleReportToSelect(e.target.value)}
+            >
+              <option value="">—</option>
+              {allReportToOptions.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {employeeDisplayName(e)}
+                  {e.is_archived ? " — archived" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <label className="flex flex-col gap-1 text-sm mt-3">
           <span className="font-medium">Career Map Role</span>

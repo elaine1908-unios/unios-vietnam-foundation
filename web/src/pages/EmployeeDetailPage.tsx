@@ -100,6 +100,18 @@ export function EmployeeDetailPage() {
         <InfoRow label="Rank" value={e.rank} />
         <InfoRow label="Office Location" value={e.office_location} />
         <InfoRow label="Commencement Date" value={e.commencement_date} />
+        <div className="flex border-b border-border last:border-0">
+          <div className="w-56 shrink-0 bg-surface-2 px-3 py-2 text-sm font-medium">Report To</div>
+          <div className="px-3 py-2 text-sm">
+            {e.report_to_employee ? (
+              <Link to={`/employees/${e.report_to_employee.id}`} className="text-accent hover:underline">
+                {employeeDisplayName(e.report_to_employee)}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
       </Section>
       {e.career_map_role_id && (
         <p className="text-xs text-ink-faint -mt-4 mb-6">

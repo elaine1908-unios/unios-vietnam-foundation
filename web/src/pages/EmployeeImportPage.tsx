@@ -112,6 +112,9 @@ function mapRow(raw: Record<string, string>, dateFormat: DateFormat): ParsedRow 
     position: field(raw, "Position"),
     rank: null,
     career_map_role_id: null,
+    // Not part of the CSV mapping — set manually per employee afterward
+    // (same reasoning as career_map_role_id above).
+    report_to_employee_id: null,
     office_location: field(raw, "Office Location"),
     commencement_date: commencementDate.value,
     phone_no: phone,
