@@ -3,6 +3,7 @@ import { db, transaction } from "../db.js";
 import { newId } from "../ids.js";
 import { requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
+import { stripDiacritics } from "../employeeName.js";
 
 export const employeesRouter = Router();
 
@@ -88,17 +89,6 @@ function resolveReportToId(rawId: string | null | undefined, selfId?: string): s
 // name/commencement_date and never recomputed — like the old sequential
 // version, it's an identifier, not a live-derived display value, so
 // correcting a typo in someone's name later doesn't change their ID.
-//
-// Vietnamese names carry diacritics (Ư, Đ, ...) that don't belong in a
-// short, universally-typeable code, so the initial is taken from the
-// diacritic-stripped form.
-function stripDiacritics(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "D");
-}
 
 function initialOf(name: string | null | undefined): string {
   const letter = stripDiacritics((name ?? "").trim()).charAt(0);
@@ -244,6 +234,23 @@ employeesRouter.get("/export", requireCap("employee.export"), (req, res) => {
     .prepare(`SELECT id FROM employees ${where} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`)
     .all(...params) as { id: string }[];
   res.json(ids.map((r) => loadDetail(r.id)));
+});
+
+// Exact (case-insensitive), non-archived-only match — backs User
+// Management's "email must match an active employee" account-creation
+// flow (see routes/users.ts). A lookup, not a search, so it needs an exact
+// match rather than GET /'s partial LIKE — must be registered before
+// GET /:id or "by-work-email" would be swallowed as an :id.
+employeesRouter.get("/by-work-email", (req, res) => {
+  const email = String(req.query.email ?? "").trim().toLowerCase();
+  if (!email) {
+    res.status(400).json({ error: "email is required." });
+    return;
+  }
+  const row = db.prepare("SELECT id FROM employees WHERE LOWER(work_email) = ? AND is_archived = 0").get(email) as
+    | { id: string }
+    | undefined;
+  res.json(row ? loadDetail(row.id) : null);
 });
 
 employeesRouter.get("/:id", (req, res) => {
@@ -473,6 +480,27 @@ employeesRouter.post("/:id/archive", requireCap("employee.archive"), (req, res) 
     return;
   }
   logAudit("employee", req.params.id, "archived", req.user!.id, "is_archived", "false", "true");
+
+  // Archiving someone should mean they can't sign in anymore, not just that
+  // their HR record is marked inactive — deactivate the matching user
+  // account (by Work Email) automatically rather than relying on whoever
+  // archived them to remember a second, separate step in User Management.
+  // Deliberately one-directional: restoring an employee does NOT
+  // auto-reactivate their account, since re-enabling a login is a decision
+  // worth a deliberate, separate action.
+  const employee = db.prepare("SELECT work_email FROM employees WHERE id = ?").get(req.params.id) as
+    | { work_email: string | null }
+    | undefined;
+  if (employee?.work_email) {
+    const user = db
+      .prepare("SELECT id FROM users WHERE LOWER(email) = ? AND is_active = 1")
+      .get(employee.work_email.toLowerCase()) as { id: string } | undefined;
+    if (user) {
+      db.prepare("UPDATE users SET is_active = 0 WHERE id = ?").run(user.id);
+      logAudit("user", user.id, "deactivated", req.user!.id, "is_active", "true", "false");
+    }
+  }
+
   res.json({ ok: true });
 });
 

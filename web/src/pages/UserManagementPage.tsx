@@ -1,9 +1,10 @@
 import { FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
-import type { User, AccessLevel } from "../lib/types";
+import type { User, AccessLevel, EmployeeDetail } from "../lib/types";
 import { ACCESS_LEVELS, ACCESS_LEVEL_LABELS } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
+import { employeeDisplayName } from "../lib/vietnamese";
 
 export function UserManagementPage() {
   const { user: me } = useAuth();
@@ -13,23 +14,46 @@ export function UserManagementPage() {
     queryFn: () => api.get<User[]>("/users"),
   });
 
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accessLevel, setAccessLevel] = useState<AccessLevel>("team_lead");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Looked up as soon as the email field loses focus — every account has
+  // to correspond to a real, active employee (matched by Work Email), and
+  // the name is taken from there rather than typed here, so this preview
+  // is also the create form's only way to confirm "yes, this is the right
+  // person" before submitting.
+  const [matchedEmployee, setMatchedEmployee] = useState<EmployeeDetail | null | undefined>(undefined);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+
+  async function handleEmailBlur() {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setMatchedEmployee(undefined);
+      return;
+    }
+    setCheckingEmail(true);
+    try {
+      const found = await api.get<EmployeeDetail | null>(`/employees/by-work-email?email=${encodeURIComponent(trimmed)}`);
+      setMatchedEmployee(found);
+    } catch {
+      setMatchedEmployee(null);
+    } finally {
+      setCheckingEmail(false);
+    }
+  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setCreating(true);
     setCreateError(null);
     try {
-      await api.post("/users", { name, email, password, access_level: accessLevel });
-      setName("");
+      await api.post("/users", { email, password, access_level: accessLevel });
       setEmail("");
       setPassword("");
       setAccessLevel("team_lead");
+      setMatchedEmployee(undefined);
       await queryClient.invalidateQueries({ queryKey: ["users"] });
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : "Something went wrong.");
@@ -85,21 +109,29 @@ export function UserManagementPage() {
       </p>
 
       <form onSubmit={handleCreate} className="card mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <input
-          className="input"
-          placeholder="Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <input
-          className="input"
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+        <div className="sm:col-span-2 flex flex-col gap-1">
+          <input
+            className="input"
+            type="email"
+            placeholder="Work Email (must match an active Employee Master record)"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setMatchedEmployee(undefined);
+            }}
+            onBlur={handleEmailBlur}
+            required
+          />
+          {checkingEmail && <p className="text-xs text-ink-faint">Checking…</p>}
+          {!checkingEmail && matchedEmployee === null && (
+            <p className="text-xs text-red-600">
+              No active employee found with this Work Email — add them to Employee Master first.
+            </p>
+          )}
+          {!checkingEmail && matchedEmployee && (
+            <p className="text-xs text-accent">Matched: {employeeDisplayName(matchedEmployee)}</p>
+          )}
+        </div>
         <input
           className="input"
           type="password"
@@ -116,7 +148,11 @@ export function UserManagementPage() {
           ))}
         </select>
         {createError && <p className="text-sm text-red-600 sm:col-span-2">{createError}</p>}
-        <button className="btn-primary sm:col-span-2" type="submit" disabled={creating}>
+        <button
+          className="btn-primary sm:col-span-2"
+          type="submit"
+          disabled={creating || checkingEmail || !matchedEmployee}
+        >
           {creating ? "Creating…" : "Create user"}
         </button>
       </form>

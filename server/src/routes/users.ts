@@ -4,6 +4,7 @@ import { hashPassword } from "../auth.js";
 import { newId } from "../ids.js";
 import { requireAuth, requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
+import { employeeDisplayName } from "../employeeName.js";
 import { toPublicUser } from "../types.js";
 import type { UserRow } from "../types.js";
 import { ACCESS_LEVELS, isAccessLevel } from "../capabilities.js";
@@ -33,14 +34,13 @@ usersRouter.get("/", (_req, res) => {
 });
 
 usersRouter.post("/", (req, res) => {
-  const { name, email, password, access_level } = req.body as {
-    name?: string;
+  const { email, password, access_level } = req.body as {
     email?: string;
     password?: string;
     access_level?: string;
   };
-  if (!name?.trim() || !email?.trim() || !password) {
-    res.status(400).json({ error: "Name, email, and password are required." });
+  if (!email?.trim() || !password) {
+    res.status(400).json({ error: "Email and password are required." });
     return;
   }
   if (password.length < 8) {
@@ -53,6 +53,19 @@ usersRouter.post("/", (req, res) => {
     res.status(400).json({ error: "A user with that email already exists." });
     return;
   }
+  // Every account must correspond to a real, currently-active employee —
+  // Work Email is the link. The name is taken from there too rather than
+  // typed by whoever creates the account, so it can't drift from Employee
+  // Master and always matches the same display order used everywhere else
+  // (see employeeName.ts).
+  const employee = db.prepare("SELECT * FROM employees WHERE LOWER(work_email) = ? AND is_archived = 0").get(
+    normalizedEmail,
+  ) as { english_name: string | null; first_name: string; last_name: string } | undefined;
+  if (!employee) {
+    res.status(400).json({ error: "No active employee found with this Work Email — add them to Employee Master first." });
+    return;
+  }
+  const name = employeeDisplayName(employee);
   // An unknown level falls back to the least privileged on create (as
   // opposed to PATCH below, which rejects one outright) — see spec section 7.
   const finalLevel: AccessLevel = isAccessLevel(access_level) ? access_level : "team_member";
@@ -61,7 +74,7 @@ usersRouter.post("/", (req, res) => {
   // whoever is creating it, not by the person who'll use it.
   db.prepare(
     "INSERT INTO users (id, name, email, access_level, password_hash, must_change_password) VALUES (?, ?, ?, ?, ?, 1)",
-  ).run(id, name.trim(), normalizedEmail, finalLevel, hashPassword(password));
+  ).run(id, name, normalizedEmail, finalLevel, hashPassword(password));
   logAudit("user", id, "created", req.user!.id, "access_level", null, finalLevel);
   res.status(201).json(toPublicUser(db.prepare("SELECT * FROM users WHERE id = ?").get(id) as unknown as UserRow));
 });
