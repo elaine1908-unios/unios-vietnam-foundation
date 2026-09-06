@@ -44,6 +44,13 @@ export function EmployeeDetailPage() {
 
   const canEdit = user?.capabilities.includes("employee.edit") ?? false;
   const canArchive = user?.capabilities.includes("employee.archive") ?? false;
+  // Team Lead/Head of Department hold employee.view too now (scoped to
+  // their own reporting chain — see employeeScopeFor in
+  // routes/employees.ts), but the server redacts these sections' fields to
+  // null for them rather than sending real values — hiding the sections
+  // entirely here avoids showing a page of misleading "—" placeholders for
+  // information they were never sent in the first place.
+  const canViewSensitive = user?.access_level === "owner";
   const displayName = employeeDisplayName(e);
 
   async function handleArchiveToggle() {
@@ -142,11 +149,13 @@ export function EmployeeDetailPage() {
         <InfoRow label="Nationality" value={e.nationality} />
       </Section>
 
-      <Section title="Identification">
-        <InfoRow label="ID No." value={e.id_no} />
-        <InfoRow label="Issued Date" value={e.issued_date} />
-        <InfoRow label="Passport No." value={e.passport_no} />
-      </Section>
+      {canViewSensitive && (
+        <Section title="Identification">
+          <InfoRow label="ID No." value={e.id_no} />
+          <InfoRow label="Issued Date" value={e.issued_date} />
+          <InfoRow label="Passport No." value={e.passport_no} />
+        </Section>
+      )}
 
       <Section title="Contract Information">
         <InfoRow label="Contract Type" value={e.contract_type} />
@@ -156,23 +165,29 @@ export function EmployeeDetailPage() {
         <InfoRow label="End Date" value={e.contract_end_date} />
       </Section>
 
-      <Section title="Financial">
-        <InfoRow label="Personal Tax No." value={e.personal_tax_no} />
-        <InfoRow label="Bank Account No." value={e.bank_account_no} />
-        <InfoRow label="Bank Name" value={e.bank_name} />
-        <InfoRow label="Health Insurance" value={e.health_insurance} />
-      </Section>
+      {canViewSensitive && (
+        <Section title="Financial">
+          <InfoRow label="Personal Tax No." value={e.personal_tax_no} />
+          <InfoRow label="Bank Account No." value={e.bank_account_no} />
+          <InfoRow label="Bank Name" value={e.bank_name} />
+          <InfoRow label="Health Insurance" value={e.health_insurance} />
+        </Section>
+      )}
 
-      <Section title="Address">
-        <InfoRow label="Permanent Address" value={e.permanent_address} />
-        <InfoRow label="Temporary Address" value={e.temporary_address} />
-      </Section>
+      {canViewSensitive && (
+        <Section title="Address">
+          <InfoRow label="Permanent Address" value={e.permanent_address} />
+          <InfoRow label="Temporary Address" value={e.temporary_address} />
+        </Section>
+      )}
 
-      <Section title="Emergency Contact">
-        <InfoRow label="Emergency Contact" value={e.emergency_contact} />
-        <InfoRow label="Relationship" value={e.relationship} />
-        <InfoRow label="Contact Phone No." value={e.contact_phone_no} />
-      </Section>
+      {canViewSensitive && (
+        <Section title="Emergency Contact">
+          <InfoRow label="Emergency Contact" value={e.emergency_contact} />
+          <InfoRow label="Relationship" value={e.relationship} />
+          <InfoRow label="Contact Phone No." value={e.contact_phone_no} />
+        </Section>
+      )}
     </div>
   );
 }

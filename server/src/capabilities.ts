@@ -35,8 +35,12 @@ export const CAPABILITIES = [
   "jobdescription.archive",
   "user.admin",
   // Employee Master — per-employee HR records (tax/bank/ID/passport
-  // numbers, addresses, health insurance). Owner-only for now, unlike
-  // profile.view/careermap.view/jobdescription.view which are universal.
+  // numbers, addresses, health insurance). Owner sees every employee with
+  // every field; Team Lead/Head of Department also hold this capability
+  // but the server further restricts what it returns to them (their own
+  // reporting chain only, sensitive fields redacted) — see
+  // employeeScopeFor() in routes/employees.ts. This capability alone only
+  // means "can reach Employee Master at all", not "sees everything".
   "employee.view",
   "employee.create",
   "employee.edit",
@@ -59,9 +63,23 @@ const ADDED_BY_LEVEL: Record<AccessLevel, Capability[]> = {
   // this app's existing "Team Member: view/download Job Descriptions" access
   // (see README) predating this spec.
   team_member: ["profile.view", "careermap.view", "jobdescription.view"],
-  team_lead: ["profile.create", "profile.edit", "profile.archive", "jobdescription.create", "jobdescription.edit", "jobdescription.archive"],
+  // employee.view here (not team_member) — cumulative, so head_of_department
+  // and owner both get it too. Scoped to "my reporting chain" for
+  // team_lead/head_of_department; see employeeScopeFor() in
+  // routes/employees.ts for what that actually restricts.
+  team_lead: [
+    "profile.create",
+    "profile.edit",
+    "profile.archive",
+    "jobdescription.create",
+    "jobdescription.edit",
+    "jobdescription.archive",
+    "employee.view",
+  ],
   head_of_department: ["careerrole.create", "careerrole.edit", "careerrole.archive"],
-  owner: ["user.admin", "employee.view", "employee.create", "employee.edit", "employee.archive", "employee.export"],
+  // employee.view isn't re-listed here — already inherited from team_lead
+  // above, cumulatively.
+  owner: ["user.admin", "employee.create", "employee.edit", "employee.archive", "employee.export"],
 };
 
 const CAPS_BY_LEVEL: Record<AccessLevel, Capability[]> = (() => {

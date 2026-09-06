@@ -4,13 +4,75 @@ import { newId } from "../ids.js";
 import { requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
 import { stripDiacritics } from "../employeeName.js";
+import type { PublicUser } from "../types.js";
 
 export const employeesRouter = Router();
 
-// Owner-only (see capabilities.ts) — this holds sensitive personal data, so
-// unlike profiles/career-map/job-descriptions, even read access is gated
-// beyond plain requireAuth.
+// This holds sensitive personal data, so unlike profiles/career-map/
+// job-descriptions, even read access is gated beyond plain requireAuth.
+// employee.view alone only means "can reach Employee Master at all" —
+// Owner sees every employee with every field; Team Lead/Head of
+// Department (the only other tiers holding it — see capabilities.ts) are
+// further restricted by employeeScopeFor() below on every read route.
 employeesRouter.use(requireCap("employee.view"));
+
+// Fields hidden from a scoped (non-Owner) viewer — Identification,
+// Financial, Address, and Emergency Contact in the UI's own section
+// grouping. Being someone's manager doesn't mean you should see their tax
+// ID, bank account, passport, home address, or emergency contact — Work
+// Information, Personal Information (name/gender/birthday/nationality),
+// Contract Information, and Report To all stay visible.
+const REDACTED_FIELDS = [
+  "id_no",
+  "issued_date",
+  "passport_no",
+  "personal_tax_no",
+  "bank_account_no",
+  "bank_name",
+  "health_insurance",
+  "permanent_address",
+  "temporary_address",
+  "emergency_contact",
+  "relationship",
+  "contact_phone_no",
+] as const;
+
+function redact<T extends Record<string, unknown>>(detail: T): T {
+  const copy = { ...detail };
+  for (const field of REDACTED_FIELDS) (copy as Record<string, unknown>)[field] = null;
+  return copy;
+}
+
+interface EmployeeScope {
+  // null = unrestricted (Owner). Otherwise the exact set of employee ids
+  // this viewer may see at all — everyone in their reporting chain,
+  // recursively (their reports, their reports' reports, and so on), not
+  // just direct reports.
+  ids: Set<string> | null;
+  redacted: boolean;
+}
+
+function employeeScopeFor(user: PublicUser): EmployeeScope {
+  if (user.access_level === "owner") return { ids: null, redacted: false };
+  const me = db.prepare("SELECT id FROM employees WHERE LOWER(work_email) = ?").get(user.email.toLowerCase()) as
+    | { id: string }
+    | undefined;
+  // Not linked to any employee record — nothing sensible to show them
+  // rather than an error (see the account-linking rules in routes/users.ts;
+  // this is mainly a safety net for an account that predates them).
+  if (!me) return { ids: new Set(), redacted: true };
+  const rows = db
+    .prepare(
+      `WITH RECURSIVE reports(id) AS (
+         SELECT id FROM employees WHERE report_to_employee_id = ?
+         UNION
+         SELECT e.id FROM employees e JOIN reports r ON e.report_to_employee_id = r.id
+       )
+       SELECT id FROM reports`,
+    )
+    .all(me.id) as { id: string }[];
+  return { ids: new Set(rows.map((r) => r.id)), redacted: true };
+}
 
 const FIELDS = [
   "work_email",
@@ -153,6 +215,11 @@ function loadDetail(id: string) {
 }
 
 employeesRouter.get("/", (req, res) => {
+  const scope = employeeScopeFor(req.user!);
+  if (scope.ids && scope.ids.size === 0) {
+    res.json([]);
+    return;
+  }
   const search = String(req.query.search ?? "").trim();
   const includeArchived = req.query.includeArchived === "true";
   const clauses: string[] = [];
@@ -164,6 +231,10 @@ employeesRouter.get("/", (req, res) => {
     );
     const like = `%${search}%`;
     params.push(like, like, like, like, like);
+  }
+  if (scope.ids) {
+    clauses.push(`e.id IN (${[...scope.ids].map(() => "?").join(", ")})`);
+    params.push(...scope.ids);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   // Self-join to bring back the manager's name for the "Report To" column —
@@ -238,10 +309,14 @@ employeesRouter.get("/export", requireCap("employee.export"), (req, res) => {
 
 // Exact (case-insensitive), non-archived-only match — backs User
 // Management's "email must match an active employee" account-creation
-// flow (see routes/users.ts). A lookup, not a search, so it needs an exact
-// match rather than GET /'s partial LIKE — must be registered before
-// GET /:id or "by-work-email" would be swallowed as an :id.
-employeesRouter.get("/by-work-email", (req, res) => {
+// flow (see routes/users.ts). Gated by user.admin specifically (not just
+// employee.view) since it's an unscoped, full-detail lookup by email alone
+// — without this, a Team Lead/Head of Department could use it to probe any
+// employee's record, bypassing employeeScopeFor() entirely. A lookup, not
+// a search, so it needs an exact match rather than GET /'s partial LIKE —
+// must be registered before GET /:id or "by-work-email" would be
+// swallowed as an :id.
+employeesRouter.get("/by-work-email", requireCap("user.admin"), (req, res) => {
   const email = String(req.query.email ?? "").trim().toLowerCase();
   if (!email) {
     res.status(400).json({ error: "email is required." });
@@ -254,12 +329,20 @@ employeesRouter.get("/by-work-email", (req, res) => {
 });
 
 employeesRouter.get("/:id", (req, res) => {
+  const scope = employeeScopeFor(req.user!);
+  if (scope.ids && !scope.ids.has(req.params.id)) {
+    // Same 404 as "doesn't exist" rather than 403 — an out-of-scope viewer
+    // shouldn't be able to tell the difference between "not your report"
+    // and "no such employee".
+    res.status(404).json({ error: "Employee not found." });
+    return;
+  }
   const row = loadDetail(req.params.id);
   if (!row) {
     res.status(404).json({ error: "Employee not found." });
     return;
   }
-  res.json(row);
+  res.json(scope.redacted ? redact(row) : row);
 });
 
 employeesRouter.post("/", requireCap("employee.create"), (req, res) => {
