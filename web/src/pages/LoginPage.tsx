@@ -20,7 +20,13 @@ export function LoginPage() {
   }, []);
 
   if (loading) return null;
-  if (user) return <Navigate to="/profiles" replace />;
+  if (user) {
+    // Employee Dashboard is the default landing page for anyone who can
+    // reach it; a plain Team Member (no employee.view) lands on Performance
+    // Profiles instead, same as before this page existed.
+    const landingPath = user.capabilities.includes("employee.view") ? "/employees/dashboard" : "/profiles";
+    return <Navigate to={landingPath} replace />;
+  }
   if (needsSetup) return <Navigate to="/setup" replace />;
 
   async function handleSubmit(e: FormEvent) {
