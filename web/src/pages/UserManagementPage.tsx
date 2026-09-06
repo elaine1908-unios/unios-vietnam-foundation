@@ -1,10 +1,19 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import type { User, AccessLevel, EmployeeDetail } from "../lib/types";
 import { ACCESS_LEVELS, ACCESS_LEVEL_LABELS } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
+
+type SortKey = "name" | "email" | "access_level" | "status";
+
+const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "email", label: "Email" },
+  { key: "access_level", label: "Access level" },
+  { key: "status", label: "Status" },
+];
 
 export function UserManagementPage() {
   const { user: me } = useAuth();
@@ -13,6 +22,50 @@ export function UserManagementPage() {
     queryKey: ["users"],
     queryFn: () => api.get<User[]>("/users"),
   });
+
+  const [search, setSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState<AccessLevel | "">("");
+  // Deactivated accounts stay in the default view (no status filter applied
+  // until the admin picks one) — unlike Employee Master's archived
+  // employees, a deactivated account is exactly the kind of thing this
+  // page exists to keep visible, not hide by default.
+  const [statusFilter, setStatusFilter] = useState<"" | "active" | "deactivated">("");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = (data ?? []).filter((u) => {
+      const matchesSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      const matchesLevel = !levelFilter || u.access_level === levelFilter;
+      const matchesStatus = !statusFilter || (statusFilter === "active" ? u.is_active : !u.is_active);
+      return matchesSearch && matchesLevel && matchesStatus;
+    });
+    const pick = (u: User) => {
+      switch (sortKey) {
+        case "name":
+          return u.name;
+        case "email":
+          return u.email;
+        case "access_level":
+          return ACCESS_LEVEL_LABELS[u.access_level];
+        case "status":
+          return u.is_active ? "Active" : "Deactivated";
+      }
+    };
+    return [...filtered].sort((a, b) => {
+      const cmp = pick(a).toLowerCase().localeCompare(pick(b).toLowerCase());
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [data, search, levelFilter, statusFilter, sortKey, sortDir]);
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -100,32 +153,8 @@ export function UserManagementPage() {
     }
   }
 
-  const [syncing, setSyncing] = useState(false);
-
-  // Retroactive fix for accounts created before names were derived from
-  // Employee Master, or whose linked employee's name has since changed —
-  // see routes/users.ts's sync-names-from-employees for the exact match
-  // rules (Work Email, case-insensitive, regardless of archived status).
-  async function syncNames() {
-    setSyncing(true);
-    try {
-      const result = await api.post<{ updated: number; unmatched: number; total: number }>(
-        "/users/sync-names-from-employees",
-      );
-      alert(
-        `Updated ${result.updated} name${result.updated === 1 ? "" : "s"}. ` +
-          `${result.unmatched} account${result.unmatched === 1 ? "" : "s"} have no matching employee and were left alone.`,
-      );
-      await queryClient.invalidateQueries({ queryKey: ["users"] });
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl">
       <h1 className="font-display font-bold text-xl mb-1">User management</h1>
       <p className="text-sm text-ink-muted mb-4">
         Accounts are created manually here, not via self-service sign-up. Whoever creates an account (or has their
@@ -181,33 +210,62 @@ export function UserManagementPage() {
         </button>
       </form>
 
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-ink-faint">
-          Updates every existing account's name to match its linked Employee Master record (by Work Email) —
-          useful right after linking accounts to employees for the first time.
-        </p>
-        <button className="btn-secondary shrink-0" onClick={syncNames} disabled={syncing} type="button">
-          {syncing ? "Syncing…" : "Sync names from Employee Master"}
-        </button>
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <input
+          className="input max-w-xs"
+          placeholder="Search by name or email…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="input w-auto"
+          value={levelFilter}
+          onChange={(e) => setLevelFilter(e.target.value as AccessLevel | "")}
+        >
+          <option value="">All access levels</option>
+          {ACCESS_LEVELS.map((l) => (
+            <option key={l} value={l}>
+              {ACCESS_LEVEL_LABELS[l]}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input w-auto"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as "" | "active" | "deactivated")}
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="deactivated">Deactivated</option>
+        </select>
       </div>
 
       {isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {(error || !data) && !isLoading && <p className="text-sm text-red-600">Couldn't load users.</p>}
-      {data && (
+      {data && rows.length === 0 && <p className="text-sm text-ink-muted">No users found.</p>}
+      {data && rows.length > 0 && (
         <div className="card !p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-surface-2 text-left text-ink-muted">
-                  <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Email</th>
-                  <th className="px-3 py-2 font-medium">Access level</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
+                  {COLUMNS.map((col) => (
+                    <th key={col.key} className="px-3 py-2 font-medium">
+                      <button
+                        className="flex items-center gap-1 hover:text-ink"
+                        onClick={() => handleSort(col.key)}
+                        type="button"
+                      >
+                        {col.label}
+                        {sortKey === col.key && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                      </button>
+                    </th>
+                  ))}
                   <th className="px-3 py-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((u) => (
+                {rows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0">
                     <td className="px-3 py-2">{u.name}</td>
                     <td className="px-3 py-2 text-ink-muted">{u.email}</td>
