@@ -112,6 +112,7 @@ export interface EmployeeSummary {
   birthday: string | null;
   commencement_date: string | null;
   contract_end_date: string | null;
+  contract_type: string | null;
 }
 
 export interface EmployeeDetail {

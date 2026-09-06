@@ -204,6 +204,15 @@ export function EmployeeDashboardPage() {
         return { id: e.id, label: employeeDisplayName(e), detail: `${years} year${years === 1 ? "" : "s"}` };
       });
 
+    // Contract Type is the one field that stands in for "has a contract on
+    // file at all" — someone missing it is missing the whole section, not
+    // just one detail, regardless of what's set for length/no./dates.
+    const missingContract = active
+      .filter((e) => !e.contract_type)
+      .map((e) => ({ id: e.id, label: employeeDisplayName(e) }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map((e) => ({ ...e, detail: "Missing" }));
+
     return {
       active,
       archived,
@@ -216,6 +225,7 @@ export function EmployeeDashboardPage() {
       expiringContracts,
       birthdaysThisMonth,
       milestones,
+      missingContract,
     };
   }, [data]);
 
@@ -239,7 +249,7 @@ export function EmployeeDashboardPage() {
         <Card label="No manager set" value={stats.noManager} colorClass="text-status-warning" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MilestoneCard
           title={`Contracts Expired or Expiring — ${monthName}`}
           borderClass="border-l-status-critical"
@@ -260,6 +270,13 @@ export function EmployeeDashboardPage() {
           pillClass="bg-status-info-soft text-status-info"
           items={stats.milestones}
           emptyText="No 1/3/5/10-year milestones this month."
+        />
+        <MilestoneCard
+          title="Missing Contract Information"
+          borderClass="border-l-status-warning"
+          pillClass="bg-status-warning-soft text-status-warning"
+          items={stats.missingContract}
+          emptyText="Everyone has contract information on file."
         />
       </div>
 
