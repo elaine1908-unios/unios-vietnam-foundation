@@ -163,9 +163,6 @@ export function EmployeeMasterListPage() {
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Employee Master</h1>
         <div className="flex gap-2">
-          <Link to="/employees/dashboard" className="btn-secondary">
-            Dashboard
-          </Link>
           {canExport && (
             <button className="btn-secondary" onClick={handleExport} disabled={exporting} type="button">
               {exporting ? "Exporting…" : "Export"}

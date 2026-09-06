@@ -243,10 +243,7 @@ export function EmployeeDashboardPage() {
 
   return (
     <div className="max-w-7xl">
-      <Link to="/employees" className="text-sm text-accent hover:underline">
-        ← Employee Master
-      </Link>
-      <h1 className="font-display font-bold text-xl mt-1 mb-4">Employee Dashboard</h1>
+      <h1 className="font-display font-bold text-xl mb-4">Employee Dashboard</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <Card label="On-going" value={stats.active.length} colorClass="text-accent" />
