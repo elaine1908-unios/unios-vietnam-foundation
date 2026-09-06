@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, transaction } from "../db.js";
 import { newId } from "../ids.js";
-import { requireCap } from "../middleware.js";
+import { requireAuth, requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
 import { stripDiacritics } from "../employeeName.js";
 import type { PublicUser } from "../types.js";
@@ -14,6 +14,67 @@ export const employeesRouter = Router();
 // Owner sees every employee with every field; Team Lead/Head of
 // Department (the only other tiers holding it — see capabilities.ts) are
 // further restricted by employeeScopeFor() below on every read route.
+// Self-service: every signed-in user can see and correct their own
+// Personal Information and Emergency Contact, regardless of employee.view —
+// a plain Team Member holds no HR capabilities at all but should still be
+// able to fix their own name/birthday/emergency contact. Deliberately its
+// own routes (never GET/PATCH /:id) so this can't be pointed at anyone
+// else's record, and registered ahead of the employee.view gate below so it
+// isn't blocked by it.
+const SELF_EDITABLE_FIELDS = [
+  "last_name",
+  "middle_name",
+  "first_name",
+  "english_name",
+  "gender",
+  "marital_status",
+  "birthday",
+  "nationality",
+  "emergency_contact",
+  "relationship",
+  "contact_phone_no",
+] as const;
+
+function myEmployeeRow(user: PublicUser): { id: string } | undefined {
+  return db.prepare("SELECT id FROM employees WHERE LOWER(work_email) = ?").get(user.email.toLowerCase()) as
+    | { id: string }
+    | undefined;
+}
+
+employeesRouter.get("/me", requireAuth, (req, res) => {
+  const me = myEmployeeRow(req.user!);
+  if (!me) {
+    res.status(404).json({ error: "No employee record is linked to your account yet." });
+    return;
+  }
+  res.json(loadDetail(me.id));
+});
+
+employeesRouter.patch("/me", requireAuth, (req, res) => {
+  const me = myEmployeeRow(req.user!);
+  if (!me) {
+    res.status(404).json({ error: "No employee record is linked to your account yet." });
+    return;
+  }
+  const existing = loadDetail(me.id)!;
+  const input = req.body as EmployeeInput;
+  if (!input.last_name?.trim()) {
+    res.status(400).json({ error: "Last name is required." });
+    return;
+  }
+  if (!input.first_name?.trim()) {
+    res.status(400).json({ error: "First name is required." });
+    return;
+  }
+  const values = SELF_EDITABLE_FIELDS.map((f) => input[f]?.toString().trim() || null);
+  db.prepare(
+    `UPDATE employees SET ${SELF_EDITABLE_FIELDS.map((f) => `${f} = ?`).join(", ")}, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).run(...values, req.user!.id, me.id);
+  const updated = loadDetail(me.id)!;
+  diffAndLog("employee", me.id, existing, updated, [...SELF_EDITABLE_FIELDS], req.user!.id);
+  res.json(updated);
+});
+
 employeesRouter.use(requireCap("employee.view"));
 
 // Fields hidden from a scoped (non-Owner) viewer — Identification,
@@ -71,7 +132,9 @@ function employeeScopeFor(user: PublicUser): EmployeeScope {
        SELECT id FROM reports`,
     )
     .all(me.id) as { id: string }[];
-  return { ids: new Set(rows.map((r) => r.id)), redacted: true };
+  // Plus themselves — a Team Lead/Head of Department can view their own
+  // reporting chain's detail pages, and now their own, same redacted shape.
+  return { ids: new Set([me.id, ...rows.map((r) => r.id)]), redacted: true };
 }
 
 const FIELDS = [

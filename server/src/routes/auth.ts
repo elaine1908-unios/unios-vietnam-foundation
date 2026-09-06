@@ -103,20 +103,6 @@ authRouter.get("/me", requireAuth, (req, res) => {
   res.json(req.user);
 });
 
-// Self-service display-name change. email and access_level are deliberately
-// IGNORED even if present in the body — this endpoint must never be usable
-// for privilege escalation or for making an account unfindable by email.
-authRouter.patch("/me", requireAuth, (req, res) => {
-  const { name } = req.body ?? {};
-  if (!name?.trim()) {
-    res.status(400).json({ error: "Name is required." });
-    return;
-  }
-  db.prepare("UPDATE users SET name = ? WHERE id = ?").run(String(name).trim(), req.user!.id);
-  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.user!.id) as unknown as UserRow;
-  res.json(toPublicUser(user));
-});
-
 // Self-service password change — requires the CURRENT password (so a
 // borrowed unlocked screen can't be used to take the account over), and this
 // is also how a forced first-time change is completed: the "current"

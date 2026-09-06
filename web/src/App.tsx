@@ -6,6 +6,7 @@ import { AppLayout } from "./layout/AppLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 import { AccountPage } from "./pages/AccountPage";
+import { MyProfilePage } from "./pages/MyProfilePage";
 import { ProfilesListPage } from "./pages/ProfilesListPage";
 import { ProfileDetailPage } from "./pages/ProfileDetailPage";
 import { ProfileEditPage } from "./pages/ProfileEditPage";
@@ -49,6 +50,7 @@ export function App() {
             >
               <Route path="/profiles" element={<ProfilesListPage />} />
               <Route path="/account" element={<AccountPage />} />
+              <Route path="/my-profile" element={<MyProfilePage />} />
               <Route
                 path="/profiles/new"
                 element={

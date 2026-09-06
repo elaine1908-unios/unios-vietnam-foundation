@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { UniosLogo } from "../components/UniosLogo";
 import { ACCESS_LEVEL_LABELS } from "../lib/types";
@@ -16,8 +16,14 @@ const headerBtnClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppLayout() {
   const { user, signOut } = useAuth();
+  const { pathname } = useLocation();
   const canAdminUsers = user?.capabilities.includes("user.admin") ?? false;
   const canViewEmployees = user?.capabilities.includes("employee.view") ?? false;
+  // Employee Master's own NavLink can't use its default prefix match here —
+  // /employees/dashboard lives under the same "/employees" prefix but is its
+  // own top-level nav item now, so it needs to be excluded explicitly rather
+  // than also lighting up Employee Master.
+  const employeeMasterActive = pathname.startsWith("/employees") && !pathname.startsWith("/employees/dashboard");
 
   return (
     <div className="min-h-screen flex">
@@ -44,15 +50,22 @@ export function AppLayout() {
             Career Map
           </NavLink>
           {canViewEmployees && (
-            <NavLink to="/employees" className={navLinkClass}>
+            <Link to="/employees" className={navLinkClass({ isActive: employeeMasterActive })}>
               Employee Master
-            </NavLink>
+            </Link>
           )}
         </nav>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="border-b border-border px-6 py-3 flex items-center gap-2 flex-wrap">
+          {/* Visible to every signed-in user regardless of capability — this
+              is where anyone (even a Team Member with no HR capabilities at
+              all) can see and correct their own Personal Information and
+              Emergency Contact; see GET/PATCH /employees/me. */}
+          <NavLink to="/my-profile" className={headerBtnClass}>
+            My Profile
+          </NavLink>
           {canAdminUsers && (
             <NavLink to="/users" className={headerBtnClass}>
               User Management

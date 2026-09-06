@@ -4,11 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { ACCESS_LEVEL_LABELS } from "../lib/types";
 
 export function AccountPage() {
-  const { user, refresh } = useAuth();
-  const [name, setName] = useState(user?.name ?? "");
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [nameSaving, setNameSaving] = useState(false);
-  const [nameSaved, setNameSaved] = useState(false);
+  const { user } = useAuth();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -18,22 +14,6 @@ export function AccountPage() {
   const [passwordSaved, setPasswordSaved] = useState(false);
 
   if (!user) return null;
-
-  async function saveName(e: FormEvent) {
-    e.preventDefault();
-    setNameSaving(true);
-    setNameError(null);
-    setNameSaved(false);
-    try {
-      await api.patch("/auth/me", { name });
-      await refresh();
-      setNameSaved(true);
-    } catch (err) {
-      setNameError(err instanceof ApiError ? err.message : "Something went wrong.");
-    } finally {
-      setNameSaving(false);
-    }
-  }
 
   async function savePassword(e: FormEvent) {
     e.preventDefault();
@@ -64,15 +44,13 @@ export function AccountPage() {
         {user.email} · {ACCESS_LEVEL_LABELS[user.access_level]}
       </p>
 
-      <form onSubmit={saveName} className="card mb-6 flex flex-col gap-2">
+      <div className="card mb-6 flex flex-col gap-1">
         <h2 className="font-display font-semibold mb-1">Name</h2>
-        <input className="input" value={name} onChange={(e) => setName(e.target.value)} required />
-        {nameError && <p className="text-sm text-red-600">{nameError}</p>}
-        {nameSaved && <p className="text-sm text-green-700">Saved.</p>}
-        <button className="btn-primary self-start" type="submit" disabled={nameSaving}>
-          {nameSaving ? "Saving…" : "Save name"}
-        </button>
-      </form>
+        <p className="text-sm">{user.name}</p>
+        <p className="text-xs text-ink-faint">
+          Taken from your Employee Master record — update it there if it's wrong.
+        </p>
+      </div>
 
       <form onSubmit={savePassword} className="card flex flex-col gap-2">
         <h2 className="font-display font-semibold mb-1">Change password</h2>

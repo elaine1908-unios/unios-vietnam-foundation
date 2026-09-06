@@ -1,5 +1,7 @@
 import type { AccessLevel, Capability } from "./capabilities.js";
 import { capabilitiesFor } from "./capabilities.js";
+import { db } from "./db.js";
+import { employeeDisplayName } from "./employeeName.js";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 
@@ -42,10 +44,23 @@ export interface PublicUser {
   capabilities: Capability[];
 }
 
+// A user's display name is always their linked Employee Master record's name
+// (matched by Work Email), never a value they typed themselves — this keeps
+// it permanently in sync with Employee Master instead of the old model where
+// it drifted until someone remembered to click "Sync names". Falls back to
+// the stored `users.name` only for an account with no matching employee row
+// (predates Employee Master, or the email was never onboarded there).
+function computedNameFor(email: string): string | null {
+  const employee = db
+    .prepare("SELECT english_name, first_name, last_name FROM employees WHERE LOWER(work_email) = ?")
+    .get(email.toLowerCase()) as { english_name: string | null; first_name: string; last_name: string } | undefined;
+  return employee ? employeeDisplayName(employee) : null;
+}
+
 export function toPublicUser(row: UserRow): PublicUser {
   return {
     id: row.id,
-    name: row.name,
+    name: computedNameFor(row.email) ?? row.name,
     email: row.email,
     access_level: row.access_level,
     is_active: Boolean(row.is_active),
