@@ -150,17 +150,24 @@ export function EmployeeDashboardPage() {
 
     // Managers ranked by direct-report count — a quick read on team sizes
     // now that Report To exists, without needing a full org chart view.
-    const directReportCounts = new Map<string, number>();
+    // The manager's name comes straight from each report's own embedded
+    // report_to_employee (the server already resolves it via a self-join)
+    // rather than re-looking the manager up in `active`/`all` — for a
+    // scoped Team Lead/Head of Department viewer (see employeeScopeFor on
+    // the server), the manager is very often the viewer themselves, who
+    // isn't in their own scoped result set at all (scope is "reports to
+    // me", not "me"), so that lookup would otherwise silently show
+    // "Unknown".
+    const directReportCounts = new Map<string, { label: string; count: number }>();
     for (const e of active) {
       if (!e.report_to_employee) continue;
       const key = e.report_to_employee.id;
-      directReportCounts.set(key, (directReportCounts.get(key) ?? 0) + 1);
+      const existing = directReportCounts.get(key);
+      if (existing) existing.count += 1;
+      else directReportCounts.set(key, { label: employeeDisplayName(e.report_to_employee), count: 1 });
     }
-    const byManager = [...directReportCounts.entries()]
-      .map(([id, count]): [string, number] => {
-        const manager = active.find((e) => e.id === id) ?? all.find((e) => e.id === id);
-        return [manager ? employeeDisplayName(manager) : "Unknown", count];
-      })
+    const byManager = [...directReportCounts.values()]
+      .map(({ label, count }): [string, number] => [label, count])
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10);
 
