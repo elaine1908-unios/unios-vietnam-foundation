@@ -139,6 +139,7 @@ const writeChildren = (profileId: string, input: ProfileInput) => {
 profilesRouter.get("/", (req, res) => {
   const search = String(req.query.search ?? "").trim();
   const includeArchived = req.query.includeArchived === "true";
+  const careerMapRoleId = String(req.query.career_map_role_id ?? "").trim();
   const clauses: string[] = [];
   const params: string[] = [];
   if (!includeArchived) clauses.push("is_archived = 0");
@@ -146,6 +147,12 @@ profilesRouter.get("/", (req, res) => {
     clauses.push("(job_title LIKE ? OR rank LIKE ? OR division LIKE ? OR function LIKE ? OR location LIKE ?)");
     const like = `%${search}%`;
     params.push(like, like, like, like, like);
+  }
+  // Backs Employee Detail's "View Performance Profile" — the Job Profile(s)
+  // linked to the same Career Map role as the employee, not a text search.
+  if (careerMapRoleId) {
+    clauses.push("career_map_role_id = ?");
+    params.push(careerMapRoleId);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const rows = db

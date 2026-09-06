@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
-import type { EmployeeDetail } from "../lib/types";
+import type { EmployeeDetail, ProfileSummary } from "../lib/types";
 import { rankBadge } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
@@ -32,6 +32,11 @@ export function EmployeeDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [archiving, setArchiving] = useState(false);
+  const [checkingProfile, setCheckingProfile] = useState(false);
+  // Populated only when more than one Job Profile is linked to this
+  // employee's Career Map role — otherwise the click navigates straight
+  // there (or shows the "not available" alert) without ever setting this.
+  const [profileChoices, setProfileChoices] = useState<ProfileSummary[] | null>(null);
 
   const { data: e, isLoading, error } = useQuery({
     queryKey: ["employee", id],
@@ -66,6 +71,34 @@ export function EmployeeDetailPage() {
     }
   }
 
+  // Looks up the Job Profile(s) linked to the same Career Map role as this
+  // employee (department/position/rank all trace back to that one role —
+  // see career_map_role_id). No role linked, or no non-archived profile
+  // built from it yet, both land on the same "not available" message —
+  // from the viewer's point of view there's nothing useful to show either
+  // way.
+  async function handleViewProfile() {
+    if (!e!.career_map_role_id) {
+      alert("This profile is not available right now.");
+      return;
+    }
+    setCheckingProfile(true);
+    try {
+      const matches = await api.get<ProfileSummary[]>(`/profiles?career_map_role_id=${e!.career_map_role_id}`);
+      if (matches.length === 0) {
+        alert("This profile is not available right now.");
+      } else if (matches.length === 1) {
+        navigate(`/profiles/${matches[0].id}`);
+      } else {
+        setProfileChoices(matches);
+      }
+    } catch {
+      alert("This profile is not available right now.");
+    } finally {
+      setCheckingProfile(false);
+    }
+  }
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-start justify-between mb-4 gap-3">
@@ -91,6 +124,34 @@ export function EmployeeDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
+          <div className="relative">
+            <button className="btn-secondary" onClick={handleViewProfile} disabled={checkingProfile}>
+              {checkingProfile ? "Checking…" : "View Performance Profile"}
+            </button>
+            {profileChoices && (
+              <div className="absolute right-0 z-10 mt-1 w-72 card !p-2 shadow-lg">
+                <p className="text-xs text-ink-muted px-2 pb-1">Multiple profiles use this role — choose one:</p>
+                {profileChoices.map((p) => (
+                  <button
+                    key={p.id}
+                    className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-surface-2"
+                    onClick={() => navigate(`/profiles/${p.id}`)}
+                    type="button"
+                  >
+                    {p.job_title}
+                    {p.location && <span className="text-ink-muted"> — {p.location}</span>}
+                  </button>
+                ))}
+                <button
+                  className="w-full text-left text-xs text-ink-faint px-2 pt-1"
+                  onClick={() => setProfileChoices(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
           {canEdit && (
             <button className="btn-secondary" onClick={() => navigate(`/employees/${e.id}/edit`)}>
               Edit
