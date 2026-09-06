@@ -20,6 +20,7 @@ const FIELDS = [
   "department",
   "position",
   "rank",
+  "function",
   "office_location",
   "commencement_date",
   "phone_no",

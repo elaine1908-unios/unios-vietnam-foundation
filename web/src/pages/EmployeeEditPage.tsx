@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { groupByDivisionAndFunction } from "../lib/careerMap";
 import type { CareerMapRole, EmployeeDetail, EmployeeInput, EmployeeSummary } from "../lib/types";
-import { CAREER_RANK_LABELS } from "../lib/types";
+import { CAREER_RANK_LABELS, rankBadge } from "../lib/types";
 import {
   OFFICE_LOCATIONS,
   BANK_NAMES,
@@ -34,6 +34,7 @@ const EMPTY_FORM: EmployeeInput = {
   department: "",
   position: "",
   rank: "",
+  function: "",
   career_map_role_id: null,
   report_to_employee_id: null,
   office_location: "",
@@ -254,6 +255,7 @@ export function EmployeeEditPage() {
       department: role.division,
       position: role.role_name,
       rank: CAREER_RANK_LABELS[role.rank],
+      function: role.function ?? "",
     }));
   }
 
@@ -352,13 +354,17 @@ export function EmployeeEditPage() {
             ))}
           </select>
           <span className="text-xs text-ink-faint">
-            Department, Position, and Rank are set by picking a role here — there's no free-text override.
+            Department, Function, Position, and Rank are set by picking a role here — there's no free-text override.
           </span>
         </label>
-        <div className="grid grid-cols-3 gap-3 mt-3">
+        <div className="grid grid-cols-4 gap-3 mt-3">
           <div className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Department</span>
             <p className="input bg-surface-2 text-ink-muted">{form.department || "—"}</p>
+          </div>
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Function</span>
+            <p className="input bg-surface-2 text-ink-muted">{form.function || "—"}</p>
           </div>
           <div className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Position</span>
@@ -366,7 +372,7 @@ export function EmployeeEditPage() {
           </div>
           <div className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Rank</span>
-            <p className="input bg-surface-2 text-ink-muted">{form.rank || "—"}</p>
+            <p className="input bg-surface-2 text-ink-muted">{rankBadge(form.rank) || "—"}</p>
           </div>
         </div>
       </div>

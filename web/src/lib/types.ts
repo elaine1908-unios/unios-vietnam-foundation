@@ -41,6 +41,16 @@ export const CAREER_RANK_LABELS: Record<CareerRankKey, string> = {
 };
 export const CAREER_RANK_ORDER: CareerRankKey[] = ["core", "specialists", "leadership", "divisional"];
 
+// Wherever an employee's rank is displayed as a fact about them (not a
+// picker for choosing one), show just the "(C)"/"(S)"/"(L)"/"(D)" — the
+// full CAREER_RANK_LABELS wording stays as-is for stored values and for
+// pickers, where the full name is what makes an option distinguishable.
+export function rankBadge(rank: string | null | undefined): string {
+  if (!rank) return "";
+  const m = rank.match(/\(([^()]+)\)\s*$/);
+  return m ? `(${m[1]})` : rank;
+}
+
 export interface CareerMapRole {
   id: string;
   division: string;
@@ -125,6 +135,7 @@ export interface EmployeeDetail {
   english_name: string | null;
   department: string | null;
   position: string | null;
+  function: string | null;
   rank: string | null;
   office_location: string | null;
   commencement_date: string | null;

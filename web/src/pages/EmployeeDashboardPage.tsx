@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { EmployeeSummary } from "../lib/types";
-import { CAREER_RANK_LABELS, CAREER_RANK_ORDER } from "../lib/types";
+import { CAREER_RANK_LABELS, CAREER_RANK_ORDER, rankBadge } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
 
 function Card({ label, value, colorClass = "text-ink" }: { label: string; value: number; colorClass?: string }) {
@@ -282,7 +282,11 @@ export function EmployeeDashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <BreakdownCard title="By Department" counts={stats.byDepartment} barClass="bg-accent" />
-        <BreakdownCard title="By Career Rank" counts={stats.byRank} barClass="bg-accent-2" />
+        <BreakdownCard
+          title="By Career Rank"
+          counts={stats.byRank.map(([label, count]): [string, number] => [rankBadge(label), count])}
+          barClass="bg-accent-2"
+        />
         <BreakdownCard title="By Office Location" counts={stats.byLocation} barClass="bg-accent" />
         <BreakdownCard title="Team Size by Manager" counts={stats.byManager} barClass="bg-accent-2" />
       </div>

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { EmployeeDetail, EmployeeSummary } from "../lib/types";
-import { CAREER_RANK_LABELS, CAREER_RANK_ORDER } from "../lib/types";
+import { CAREER_RANK_LABELS, CAREER_RANK_ORDER, rankBadge } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
 import { OffshoreIcon } from "../components/OffshoreIcon";
@@ -263,7 +263,7 @@ export function EmployeeMasterListPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-2 text-ink-muted">{e.department || "—"}</td>
-                  <td className="px-4 py-2 text-ink-muted">{e.rank || "—"}</td>
+                  <td className="px-4 py-2 text-ink-muted">{rankBadge(e.rank) || "—"}</td>
                   <td className="px-4 py-2 text-ink-muted">
                     {e.report_to_employee ? (
                       <Link to={`/employees/${e.report_to_employee.id}`} className="hover:underline hover:text-accent">

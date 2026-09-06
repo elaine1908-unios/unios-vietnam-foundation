@@ -322,6 +322,7 @@ function mapCreateRow(raw: Record<string, string>, mapping: Record<string, strin
     last_name: plain.last_name ?? "",
     first_name: plain.first_name ?? "",
     rank: null,
+    function: null,
     career_map_role_id: null,
     // Not part of the CSV mapping — set manually per employee afterward
     // (same reasoning as career_map_role_id above).

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import type { EmployeeDetail } from "../lib/types";
+import { rankBadge } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 import { employeeDisplayName } from "../lib/vietnamese";
 import { OffshoreIcon } from "../components/OffshoreIcon";
@@ -100,8 +101,9 @@ export function EmployeeDetailPage() {
         <InfoRow label="Work Email" value={e.work_email} />
         <InfoRow label="Phone No." value={e.phone_no} />
         <InfoRow label="Department" value={e.department} />
+        <InfoRow label="Function" value={e.function} />
         <InfoRow label="Position" value={e.position} />
-        <InfoRow label="Rank" value={e.rank} />
+        <InfoRow label="Rank" value={rankBadge(e.rank)} />
         <InfoRow label="Office Location" value={e.office_location} />
         <InfoRow label="Commencement Date" value={e.commencement_date} />
         <InfoRow label="Off-shore" value={e.is_offshore ? "Yes" : "No"} />

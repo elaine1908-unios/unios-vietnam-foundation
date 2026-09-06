@@ -4,10 +4,10 @@ import { employeeDisplayName } from "./vietnamese";
 
 // Column order/headers mirror the CSV import mapping exactly (see
 // EmployeeImportPage.tsx) so an export can be edited and fed straight back
-// in via "Update existing employees only" — Rank and Report To are the two
-// exceptions, included for reference even though neither is part of the
-// import mapping (Rank comes from the Career Map link; Report To is set
-// manually — see the same reasoning in routes/employees.ts).
+// in via "Update existing employees only" — Rank, Function, and Report To
+// are exceptions, included for reference even though none is part of the
+// import mapping (Rank/Function come from the Career Map link; Report To
+// is set manually — see the same reasoning in routes/employees.ts).
 const EXPORT_COLUMNS: { header: string; get: (e: EmployeeDetail) => string }[] = [
   { header: "Employee ID", get: (e) => e.employee_code ?? "" },
   { header: "Work Email", get: (e) => e.work_email ?? "" },
@@ -16,6 +16,7 @@ const EXPORT_COLUMNS: { header: string; get: (e: EmployeeDetail) => string }[] =
   { header: "First Name", get: (e) => e.first_name ?? "" },
   { header: "English Name", get: (e) => e.english_name ?? "" },
   { header: "Department", get: (e) => e.department ?? "" },
+  { header: "Function", get: (e) => e.function ?? "" },
   { header: "Position", get: (e) => e.position ?? "" },
   { header: "Rank", get: (e) => e.rank ?? "" },
   { header: "Office Location", get: (e) => e.office_location ?? "" },
