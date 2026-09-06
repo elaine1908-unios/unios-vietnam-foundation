@@ -100,6 +100,30 @@ export function UserManagementPage() {
     }
   }
 
+  const [syncing, setSyncing] = useState(false);
+
+  // Retroactive fix for accounts created before names were derived from
+  // Employee Master, or whose linked employee's name has since changed —
+  // see routes/users.ts's sync-names-from-employees for the exact match
+  // rules (Work Email, case-insensitive, regardless of archived status).
+  async function syncNames() {
+    setSyncing(true);
+    try {
+      const result = await api.post<{ updated: number; unmatched: number; total: number }>(
+        "/users/sync-names-from-employees",
+      );
+      alert(
+        `Updated ${result.updated} name${result.updated === 1 ? "" : "s"}. ` +
+          `${result.unmatched} account${result.unmatched === 1 ? "" : "s"} have no matching employee and were left alone.`,
+      );
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="max-w-3xl">
       <h1 className="font-display font-bold text-xl mb-1">User management</h1>
@@ -156,6 +180,16 @@ export function UserManagementPage() {
           {creating ? "Creating…" : "Create user"}
         </button>
       </form>
+
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-ink-faint">
+          Updates every existing account's name to match its linked Employee Master record (by Work Email) —
+          useful right after linking accounts to employees for the first time.
+        </p>
+        <button className="btn-secondary shrink-0" onClick={syncNames} disabled={syncing} type="button">
+          {syncing ? "Syncing…" : "Sync names from Employee Master"}
+        </button>
+      </div>
 
       {isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {(error || !data) && !isLoading && <p className="text-sm text-red-600">Couldn't load users.</p>}

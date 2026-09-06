@@ -79,6 +79,37 @@ usersRouter.post("/", (req, res) => {
   res.status(201).json(toPublicUser(db.prepare("SELECT * FROM users WHERE id = ?").get(id) as unknown as UserRow));
 });
 
+// Retroactive fix for accounts that existed before account creation started
+// deriving name from Employee Master (see POST / above), or whose linked
+// employee's name has since been corrected there. Same match (Work Email,
+// case-insensitive) and same display-name derivation — but unlike account
+// creation, this matches regardless of the employee's archived status: a
+// person's real name doesn't change just because their HR record was
+// archived. An unmatched account (no employee with that Work Email) is
+// left alone, not treated as an error — plenty of legitimate accounts may
+// predate Employee Master entirely.
+usersRouter.post("/sync-names-from-employees", (req, res) => {
+  const users = db.prepare("SELECT * FROM users").all() as unknown as UserRow[];
+  let updated = 0;
+  let unmatched = 0;
+  for (const user of users) {
+    const employee = db.prepare("SELECT * FROM employees WHERE LOWER(work_email) = ?").get(user.email.toLowerCase()) as
+      | { english_name: string | null; first_name: string; last_name: string }
+      | undefined;
+    if (!employee) {
+      unmatched++;
+      continue;
+    }
+    const newName = employeeDisplayName(employee);
+    if (newName && newName !== user.name) {
+      logAudit("user", user.id, "updated", req.user!.id, "name", user.name, newName);
+      db.prepare("UPDATE users SET name = ? WHERE id = ?").run(newName, user.id);
+      updated++;
+    }
+  }
+  res.json({ updated, unmatched, total: users.length });
+});
+
 usersRouter.patch("/:id", (req, res) => {
   const { access_level } = req.body as { access_level?: string };
   if (!isAccessLevel(access_level)) {
