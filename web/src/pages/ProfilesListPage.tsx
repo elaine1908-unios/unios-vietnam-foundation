@@ -64,7 +64,7 @@ export function ProfilesListPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-7xl">
       <div className="flex items-center justify-between mb-4 gap-3">
         <h1 className="font-display font-bold text-xl">Job Profiles</h1>
         {user?.capabilities.includes("profile.create") && (
