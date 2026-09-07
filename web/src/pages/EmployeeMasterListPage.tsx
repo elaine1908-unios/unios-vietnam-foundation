@@ -39,6 +39,8 @@ export function EmployeeMasterListPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["employees", search, includeArchived],
@@ -107,6 +109,24 @@ export function EmployeeMasterListPage() {
   const canCreate = user?.capabilities.includes("employee.create") ?? false;
   const canDelete = user?.capabilities.includes("employee.deleteAll") ?? false;
   const canExport = user?.capabilities.includes("employee.export") ?? false;
+  const canEdit = user?.capabilities.includes("employee.edit") ?? false;
+
+  // One-off (or as-needed) fix for employees whose Department/Position/Rank/
+  // Function drifted from their linked Career Map role — see
+  // roleDerivedFields() and POST /employees/sync-role-fields on the server.
+  async function handleSyncRoleFields() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await api.post<{ updated: number; checked: number }>("/employees/sync-role-fields");
+      await queryClient.invalidateQueries({ queryKey: ["employees"] });
+      setSyncResult(`Updated ${result.updated} of ${result.checked} linked employee(s).`);
+    } catch (err) {
+      setSyncResult(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function handleDeleteAll() {
     const typed = window.prompt(
@@ -163,6 +183,11 @@ export function EmployeeMasterListPage() {
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Employee Master</h1>
         <div className="flex gap-2">
+          {canEdit && (
+            <button className="btn-secondary" onClick={handleSyncRoleFields} disabled={syncing} type="button">
+              {syncing ? "Syncing…" : "Sync role fields from Career Map"}
+            </button>
+          )}
           {canExport && (
             <button className="btn-secondary" onClick={handleExport} disabled={exporting} type="button">
               {exporting ? "Exporting…" : "Export"}
@@ -184,6 +209,7 @@ export function EmployeeMasterListPage() {
         Per-employee HR records — owner-only for now, holds sensitive personal data.
       </p>
       {exportError && <p className="text-sm text-red-600 mb-4">{exportError}</p>}
+      {syncResult && <p className="text-sm text-ink-muted mb-4">{syncResult}</p>}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input

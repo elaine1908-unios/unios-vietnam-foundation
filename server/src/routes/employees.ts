@@ -4,6 +4,7 @@ import { newId } from "../ids.js";
 import { requireAuth, requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
 import { stripDiacritics } from "../employeeName.js";
+import { CAREER_RANK_LABELS } from "../types.js";
 import type { PublicUser } from "../types.js";
 
 export const employeesRouter = Router();
@@ -206,6 +207,41 @@ function resolveCareerMapRoleId(rawId: string | null | undefined): string | null
   if (!rawId) return null;
   const exists = db.prepare("SELECT id FROM career_map_roles WHERE id = ?").get(rawId);
   return exists ? rawId : "invalid";
+}
+
+// Department/Position/Rank/Function all trace back to the linked Career Map
+// role — EmployeeEditPage.tsx enforces "no free-text override" for these
+// four only on the client (handleRoleSelect), which meant a raw API call or
+// a CSV import row could still write values that don't match the resolved
+// role (this is exactly how Function ended up blank on employees whose CSV
+// predated the Function column, while Department/Position/Rank stayed
+// correct from older data). Deriving them here from the role itself, and
+// using this for every create/edit path, makes it impossible for them to
+// drift out of sync regardless of where the request came from.
+const ROLE_DERIVED_FIELDS = new Set(["department", "position", "rank", "function"]);
+
+function roleDerivedFields(careerMapRoleId: string | null): Record<"department" | "position" | "rank" | "function", string | null> {
+  if (!careerMapRoleId) return { department: null, position: null, rank: null, function: null };
+  const role = db.prepare("SELECT * FROM career_map_roles WHERE id = ?").get(careerMapRoleId) as
+    | { division: string; role_name: string; rank: keyof typeof CAREER_RANK_LABELS; function: string | null }
+    | undefined;
+  if (!role) return { department: null, position: null, rank: null, function: null };
+  return {
+    department: role.division,
+    position: role.role_name,
+    rank: CAREER_RANK_LABELS[role.rank],
+    function: role.function ?? null,
+  };
+}
+
+function fieldValues(
+  fields: readonly string[],
+  input: EmployeeInput,
+  roleFields: ReturnType<typeof roleDerivedFields>,
+): (string | null)[] {
+  return fields.map((f) =>
+    ROLE_DERIVED_FIELDS.has(f) ? roleFields[f as keyof typeof roleFields] : input[f]?.toString().trim() || null,
+  );
 }
 
 // Same dropdown-only, traceability-link pattern as career_map_role_id, but
@@ -438,7 +474,7 @@ employeesRouter.post("/", requireCap("employee.create"), (req, res) => {
     return;
   }
   const id = newId();
-  const values = FIELDS.map((f) => input[f]?.toString().trim() || null);
+  const values = fieldValues(FIELDS, input, roleDerivedFields(careerMapRoleId));
   const employeeCode = generateEmployeeCode(input.first_name, input.last_name, input.commencement_date as string | null | undefined);
   db.prepare(
     `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, is_offshore, created_by, updated_by) VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?)`,
@@ -480,7 +516,7 @@ employeesRouter.post("/import", requireCap("employee.create"), (req, res) => {
       // — set manually per employee afterward, same as Department/Position
       // used to be before the Career Map link existed.
       const id = newId();
-      const values = FIELDS.map((f) => row[f]?.toString().trim() || null);
+      const values = fieldValues(FIELDS, row, roleDerivedFields(careerMapRoleId));
       const employeeCode = generateEmployeeCode(row.first_name, row.last_name, row.commencement_date as string | null | undefined);
       db.prepare(
         `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, is_offshore, is_archived, created_by, updated_by)
@@ -562,7 +598,11 @@ employeesRouter.post("/import/update", requireCap("employee.edit"), (req, res) =
         results.push({ row: i, status: "skipped", reason: "No matching employee found" });
         return;
       }
-      const fieldsToUpdate = FIELDS.filter((f) => row[f]?.toString().trim());
+      // Department/Position/Rank/Function are never eligible here — this
+      // route can't touch career_map_role_id at all, and those four fields
+      // must only ever come from the linked role (see roleDerivedFields
+      // above), never from arbitrary CSV text.
+      const fieldsToUpdate = FIELDS.filter((f) => !ROLE_DERIVED_FIELDS.has(f) && row[f]?.toString().trim());
       if (fieldsToUpdate.length === 0) {
         results.push({ row: i, status: "skipped", reason: "No fields to update" });
         return;
@@ -587,6 +627,46 @@ employeesRouter.post("/import/update", requireCap("employee.edit"), (req, res) =
     skipped: results.filter((r) => r.status === "skipped").length,
     results,
   });
+});
+
+// Retroactive fix, same shape as sync-names-from-employees in
+// routes/users.ts: backfills Department/Position/Rank/Function for every
+// employee already linked to a Career Map role, in case they drifted before
+// roleDerivedFields() was enforced on every write path (e.g. imported from a
+// CSV whose own columns didn't match the resolved role, or predated the
+// Function column entirely). Safe to re-run any time — only writes rows
+// that actually differ from what the linked role currently derives.
+employeesRouter.post("/sync-role-fields", requireCap("employee.edit"), (req, res) => {
+  const rows = db
+    .prepare(
+      "SELECT id, career_map_role_id, department, position, rank, function FROM employees WHERE career_map_role_id IS NOT NULL",
+    )
+    .all() as {
+    id: string;
+    career_map_role_id: string;
+    department: string | null;
+    position: string | null;
+    rank: string | null;
+    function: string | null;
+  }[];
+  let updated = 0;
+  for (const row of rows) {
+    const derived = roleDerivedFields(row.career_map_role_id);
+    if (
+      derived.department === row.department &&
+      derived.position === row.position &&
+      derived.rank === row.rank &&
+      derived.function === row.function
+    ) {
+      continue;
+    }
+    db.prepare(
+      "UPDATE employees SET department = ?, position = ?, rank = ?, function = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?",
+    ).run(derived.department, derived.position, derived.rank, derived.function, req.user!.id, row.id);
+    logAudit("employee", row.id, "updated", req.user!.id, "role_fields", null, null);
+    updated++;
+  }
+  res.json({ updated, checked: rows.length });
 });
 
 employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {
@@ -615,7 +695,7 @@ employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {
     res.status(400).json({ error: "An employee can't report to themselves." });
     return;
   }
-  const values = FIELDS.map((f) => input[f]?.toString().trim() || null);
+  const values = fieldValues(FIELDS, input, roleDerivedFields(careerMapRoleId));
   db.prepare(
     `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, is_offshore = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
   ).run(...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, req.user!.id, req.params.id);

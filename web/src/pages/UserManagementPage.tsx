@@ -286,26 +286,36 @@ export function UserManagementPage() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2 text-ink-muted">
-                      {u.is_active ? "Active" : "Deactivated"}
+                    <td className="px-3 py-2">
+                      {u.is_active ? (
+                        <span className="text-xs rounded-full bg-status-positive-soft border border-status-positive/30 px-2 py-0.5 text-status-positive font-medium">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="text-xs rounded-full bg-status-critical-soft border border-status-critical/30 px-2 py-0.5 text-status-critical font-medium">
+                          Deactivated
+                        </span>
+                      )}
                       {u.must_change_password && u.is_active && (
                         <span className="ml-1 text-xs text-ink-faint">(must change password)</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      <button className="text-sm text-accent mr-3" onClick={() => resetPassword(u.id, u.name)}>
-                        Reset password
-                      </button>
-                      {u.id !== me?.id &&
-                        (u.is_active ? (
-                          <button className="text-sm text-red-600" onClick={() => deactivate(u.id)}>
-                            Deactivate
-                          </button>
-                        ) : (
-                          <button className="text-sm text-accent" onClick={() => reactivate(u.id)}>
-                            Reactivate
-                          </button>
-                        ))}
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col items-start gap-1">
+                        <button className="text-sm text-accent" onClick={() => resetPassword(u.id, u.name)}>
+                          Reset password
+                        </button>
+                        {u.id !== me?.id &&
+                          (u.is_active ? (
+                            <button className="text-sm text-red-600" onClick={() => deactivate(u.id)}>
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button className="text-sm text-accent" onClick={() => reactivate(u.id)}>
+                              Reactivate
+                            </button>
+                          ))}
+                      </div>
                     </td>
                   </tr>
                 ))}
