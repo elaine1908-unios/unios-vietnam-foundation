@@ -10,18 +10,23 @@ export function stripDiacritics(s: string): string {
     .replace(/Đ/g, "D");
 }
 
-// The employee's display name is always [English Name (if any)] [First
-// Name] [Last Name] — Middle Name dropped, Western first/last order instead
-// of the Vietnamese last-first convention. First/Last are shown in
-// unaccented form (a quick, universally-typeable reference), regardless of
-// whether the underlying record has diacritics from manual entry or a CSV
-// import — the stored value itself keeps its diacritics untouched.
+// The employee's display name is always [Last Name] [Middle Name] [First
+// Name] ([English Name], if any) — the standard Vietnamese name order,
+// with the English name (when set) appended in parentheses rather than
+// leading. Last/Middle/First are shown in unaccented form (a quick,
+// universally-typeable reference), regardless of whether the underlying
+// record has diacritics from manual entry or a CSV import — the stored
+// value itself keeps its diacritics untouched.
 export function employeeDisplayName(e: {
   english_name?: string | null;
   first_name?: string | null;
+  middle_name?: string | null;
   last_name?: string | null;
 }): string {
-  return [e.english_name, stripDiacritics(e.first_name ?? ""), stripDiacritics(e.last_name ?? "")]
+  const vietnameseName = [e.last_name, e.middle_name, e.first_name]
+    .map((p) => stripDiacritics(p ?? ""))
     .filter(Boolean)
     .join(" ");
+  if (!e.english_name) return vietnameseName;
+  return vietnameseName ? `${vietnameseName} (${e.english_name})` : e.english_name;
 }

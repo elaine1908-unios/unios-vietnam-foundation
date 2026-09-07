@@ -52,8 +52,10 @@ export interface PublicUser {
 // (predates Employee Master, or the email was never onboarded there).
 function computedNameFor(email: string): string | null {
   const employee = db
-    .prepare("SELECT english_name, first_name, last_name FROM employees WHERE LOWER(work_email) = ?")
-    .get(email.toLowerCase()) as { english_name: string | null; first_name: string; last_name: string } | undefined;
+    .prepare("SELECT english_name, first_name, middle_name, last_name FROM employees WHERE LOWER(work_email) = ?")
+    .get(email.toLowerCase()) as
+    | { english_name: string | null; first_name: string; middle_name: string | null; last_name: string }
+    | undefined;
   return employee ? employeeDisplayName(employee) : null;
 }
 

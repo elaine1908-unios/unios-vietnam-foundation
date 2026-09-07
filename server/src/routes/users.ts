@@ -60,7 +60,7 @@ usersRouter.post("/", (req, res) => {
   // (see employeeName.ts).
   const employee = db.prepare("SELECT * FROM employees WHERE LOWER(work_email) = ? AND is_archived = 0").get(
     normalizedEmail,
-  ) as { english_name: string | null; first_name: string; last_name: string } | undefined;
+  ) as { english_name: string | null; first_name: string; middle_name: string | null; last_name: string } | undefined;
   if (!employee) {
     res.status(400).json({ error: "No active employee found with this Work Email — add them to Employee Master first." });
     return;
@@ -94,7 +94,7 @@ usersRouter.post("/sync-names-from-employees", (req, res) => {
   let unmatched = 0;
   for (const user of users) {
     const employee = db.prepare("SELECT * FROM employees WHERE LOWER(work_email) = ?").get(user.email.toLowerCase()) as
-      | { english_name: string | null; first_name: string; last_name: string }
+      | { english_name: string | null; first_name: string; middle_name: string | null; last_name: string }
       | undefined;
     if (!employee) {
       unmatched++;

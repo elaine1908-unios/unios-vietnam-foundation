@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import type { User, AccessLevel, EmployeeDetail } from "../lib/types";
 import { ACCESS_LEVELS, ACCESS_LEVEL_LABELS } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
-import { employeeDisplayName } from "../lib/vietnamese";
+import { employeeDisplayName, stripDiacritics } from "../lib/vietnamese";
 
 type SortKey = "name" | "email" | "access_level" | "status";
 
@@ -34,9 +34,13 @@ export function UserManagementPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    // Diacritics-insensitive on both sides — u.name is the computed Employee
+    // Master display name (see employeeDisplayName), already shown
+    // unaccented, but stripping the typed query too means it still matches
+    // if someone searches with the accents typed in.
+    const q = stripDiacritics(search.trim()).toLowerCase();
     const filtered = (data ?? []).filter((u) => {
-      const matchesSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      const matchesSearch = !q || stripDiacritics(u.name).toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
       const matchesLevel = !levelFilter || u.access_level === levelFilter;
       const matchesStatus = !statusFilter || (statusFilter === "active" ? u.is_active : !u.is_active);
       return matchesSearch && matchesLevel && matchesStatus;

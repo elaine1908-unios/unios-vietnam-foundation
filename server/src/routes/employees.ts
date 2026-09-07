@@ -104,6 +104,17 @@ function redact<T extends Record<string, unknown>>(detail: T): T {
   return copy;
 }
 
+// Name/department search is diacritics-insensitive on both sides — Vietnamese
+// names are always shown unaccented (see employeeDisplayName), so someone
+// searching "Nguyen" expects it to find "Nguyễn" without them having to type
+// the accents back in. SQLite's LIKE has no built-in accent folding, so this
+// matches in JS after the SQL query rather than via a LIKE clause.
+function matchesSearch(fields: (string | null | undefined)[], search: string): boolean {
+  if (!search) return true;
+  const needle = stripDiacritics(search).toLowerCase();
+  return fields.some((f) => f && stripDiacritics(f).toLowerCase().includes(needle));
+}
+
 interface EmployeeScope {
   // null = unrestricted (Owner/Admin). Otherwise the exact set of employee
   // ids this viewer may see at all — everyone in their reporting chain,
@@ -288,13 +299,6 @@ employeesRouter.get("/", (req, res) => {
   const clauses: string[] = [];
   const params: string[] = [];
   if (!includeArchived) clauses.push("e.is_archived = 0");
-  if (search) {
-    clauses.push(
-      "(e.last_name LIKE ? OR e.middle_name LIKE ? OR e.first_name LIKE ? OR e.english_name LIKE ? OR e.department LIKE ?)",
-    );
-    const like = `%${search}%`;
-    params.push(like, like, like, like, like);
-  }
   if (scope.ids) {
     clauses.push(`e.id IN (${[...scope.ids].map(() => "?").join(", ")})`);
     params.push(...scope.ids);
@@ -317,33 +321,40 @@ employeesRouter.get("/", (req, res) => {
     )
     .all(...params) as Record<string, unknown>[];
   res.json(
-    rows.map((r) => ({
-      id: r.id,
-      employee_code: r.employee_code,
-      last_name: r.last_name,
-      middle_name: r.middle_name,
-      first_name: r.first_name,
-      english_name: r.english_name,
-      department: r.department,
-      rank: r.rank,
-      office_location: r.office_location,
-      is_archived: Boolean(r.is_archived),
-      is_offshore: Boolean(r.is_offshore),
-      birthday: r.birthday,
-      commencement_date: r.commencement_date,
-      contract_end_date: r.contract_end_date,
-      contract_type: r.contract_type,
-      report_to_employee: r.report_to_id
-        ? {
-            id: r.report_to_id,
-            employee_code: r.report_to_employee_code,
-            last_name: r.report_to_last_name,
-            middle_name: r.report_to_middle_name,
-            first_name: r.report_to_first_name,
-            english_name: r.report_to_english_name,
-          }
-        : null,
-    })),
+    rows
+      .filter((r) =>
+        matchesSearch(
+          [r.last_name, r.middle_name, r.first_name, r.english_name, r.department] as (string | null)[],
+          search,
+        ),
+      )
+      .map((r) => ({
+        id: r.id,
+        employee_code: r.employee_code,
+        last_name: r.last_name,
+        middle_name: r.middle_name,
+        first_name: r.first_name,
+        english_name: r.english_name,
+        department: r.department,
+        rank: r.rank,
+        office_location: r.office_location,
+        is_archived: Boolean(r.is_archived),
+        is_offshore: Boolean(r.is_offshore),
+        birthday: r.birthday,
+        commencement_date: r.commencement_date,
+        contract_end_date: r.contract_end_date,
+        contract_type: r.contract_type,
+        report_to_employee: r.report_to_id
+          ? {
+              id: r.report_to_id,
+              employee_code: r.report_to_employee_code,
+              last_name: r.report_to_last_name,
+              middle_name: r.report_to_middle_name,
+              first_name: r.report_to_first_name,
+              english_name: r.report_to_english_name,
+            }
+          : null,
+      })),
   );
 });
 
@@ -358,16 +369,17 @@ employeesRouter.get("/export", requireCap("employee.export"), (req, res) => {
   const clauses: string[] = [];
   const params: string[] = [];
   if (!includeArchived) clauses.push("is_archived = 0");
-  if (search) {
-    clauses.push("(last_name LIKE ? OR middle_name LIKE ? OR first_name LIKE ? OR english_name LIKE ? OR department LIKE ?)");
-    const like = `%${search}%`;
-    params.push(like, like, like, like, like);
-  }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  const ids = db
-    .prepare(`SELECT id FROM employees ${where} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`)
-    .all(...params) as { id: string }[];
-  res.json(ids.map((r) => loadDetail(r.id)));
+  const rows = db
+    .prepare(
+      `SELECT id, last_name, middle_name, first_name, english_name, department FROM employees ${where} ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE`,
+    )
+    .all(...params) as { id: string; last_name: string | null; middle_name: string | null; first_name: string | null; english_name: string | null; department: string | null }[];
+  res.json(
+    rows
+      .filter((r) => matchesSearch([r.last_name, r.middle_name, r.first_name, r.english_name, r.department], search))
+      .map((r) => loadDetail(r.id)),
+  );
 });
 
 // Exact (case-insensitive), non-archived-only match — backs User
