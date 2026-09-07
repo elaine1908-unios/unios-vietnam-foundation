@@ -158,7 +158,7 @@ export function UserManagementPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-7xl">
       <h1 className="font-display font-bold text-xl mb-1">User management</h1>
       <p className="text-sm text-ink-muted mb-4">
         Accounts are created manually here, not via self-service sign-up. Whoever creates an account (or has their

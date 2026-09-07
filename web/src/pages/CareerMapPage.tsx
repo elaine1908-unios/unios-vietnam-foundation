@@ -141,7 +141,7 @@ export function CareerMapPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-7xl">
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Career Map</h1>
         {canCreate && (
@@ -256,11 +256,11 @@ export function CareerMapPage() {
             <div className="border border-t-0 border-border rounded-b-md overflow-hidden">
               <table className="w-full table-fixed text-sm">
                 <colgroup>
-                  <col className="w-[18%]" />
-                  <col className="w-[32%]" />
-                  <col className="w-[30%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[28%]" />
+                  <col className="w-[26%]" />
                   <col className="w-[12%]" />
-                  {(canEdit || canArchive) && <col className="w-[8%]" />}
+                  {(canEdit || canArchive) && <col className="w-[18%]" />}
                 </colgroup>
                 <thead>
                   <tr className="border-b border-border bg-surface-2 text-left text-ink-muted">
