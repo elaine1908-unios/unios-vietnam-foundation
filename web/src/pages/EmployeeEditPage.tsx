@@ -294,7 +294,7 @@ export function EmployeeEditPage() {
   }
 
   return (
-    <div className="max-w-3xl pb-16">
+    <div className="max-w-7xl pb-16">
       <h1 className="font-display font-bold text-xl mb-3">{isNew ? "New employee" : "Edit employee"}</h1>
       {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 

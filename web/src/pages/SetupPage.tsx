@@ -51,7 +51,7 @@ export function SetupPage() {
         </p>
         <p className="font-display font-bold text-lg mb-1">Set up the first account</p>
         <p className="text-sm text-ink-muted mb-6">
-          This creates the first Owner account. Every other account is created from here afterward.
+          This creates the first BOD account. Every other account is created from here afterward.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
@@ -74,7 +74,7 @@ export function SetupPage() {
           />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button className="btn-primary mt-2" type="submit" disabled={submitting}>
-            {submitting ? "Creating…" : "Create Owner account"}
+            {submitting ? "Creating…" : "Create BOD account"}
           </button>
         </form>
       </div>

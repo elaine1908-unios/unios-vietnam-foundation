@@ -1,14 +1,15 @@
 // Mirrors server/src/capabilities.ts (single source of truth for what each
 // level maps to — the client never keeps a copy of that mapping, see the
 // `capabilities` field on User below).
-export const ACCESS_LEVELS = ["team_member", "team_lead", "head_of_department", "owner"] as const;
+export const ACCESS_LEVELS = ["team_member", "team_lead", "head_of_department", "admin", "owner"] as const;
 export type AccessLevel = (typeof ACCESS_LEVELS)[number];
 
 export const ACCESS_LEVEL_LABELS: Record<AccessLevel, string> = {
   team_member: "Team Member",
   team_lead: "Team Lead",
-  head_of_department: "Head of Department",
-  owner: "Owner",
+  head_of_department: "HOD",
+  admin: "Admin",
+  owner: "BOD",
 };
 
 export type Capability =
@@ -29,7 +30,8 @@ export type Capability =
   | "employee.create"
   | "employee.edit"
   | "employee.archive"
-  | "employee.export";
+  | "employee.export"
+  | "employee.deleteAll";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 

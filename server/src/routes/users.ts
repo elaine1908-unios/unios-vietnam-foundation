@@ -122,7 +122,7 @@ usersRouter.patch("/:id", (req, res) => {
     return;
   }
   if (target.access_level === "owner" && access_level !== "owner" && countActiveOwners(target.id) === 0) {
-    res.status(400).json({ error: "At least one active Owner must remain — promote someone else first." });
+    res.status(400).json({ error: "At least one active BOD member must remain — promote someone else first." });
     return;
   }
   diffAndLog("user", target.id, { access_level: target.access_level }, { access_level }, ["access_level"], req.user!.id);
@@ -143,7 +143,7 @@ usersRouter.delete("/:id", (req, res) => {
     return;
   }
   if (target.access_level === "owner" && countActiveOwners(target.id) === 0) {
-    res.status(400).json({ error: "At least one active Owner must remain — promote someone else first." });
+    res.status(400).json({ error: "At least one active BOD member must remain — promote someone else first." });
     return;
   }
   db.prepare("UPDATE users SET is_active = 0 WHERE id = ?").run(target.id);

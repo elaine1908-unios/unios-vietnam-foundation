@@ -87,7 +87,7 @@ authRouter.post("/login", (req, res) => {
     return;
   }
   if (!user.is_active) {
-    res.status(403).json({ error: "This account has been deactivated. Contact an Owner." });
+    res.status(403).json({ error: "This account has been deactivated. Contact a BOD member." });
     return;
   }
   res.cookie("session", signSession(user.id), SESSION_COOKIE);

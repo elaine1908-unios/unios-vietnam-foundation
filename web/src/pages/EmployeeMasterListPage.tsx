@@ -105,7 +105,7 @@ export function EmployeeMasterListPage() {
   }
 
   const canCreate = user?.capabilities.includes("employee.create") ?? false;
-  const canDelete = user?.capabilities.includes("employee.archive") ?? false;
+  const canDelete = user?.capabilities.includes("employee.deleteAll") ?? false;
   const canExport = user?.capabilities.includes("employee.export") ?? false;
 
   async function handleDeleteAll() {

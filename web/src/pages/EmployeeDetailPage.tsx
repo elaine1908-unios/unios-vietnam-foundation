@@ -54,8 +54,9 @@ export function EmployeeDetailPage() {
   // routes/employees.ts), but the server redacts these sections' fields to
   // null for them rather than sending real values — hiding the sections
   // entirely here avoids showing a page of misleading "—" placeholders for
-  // information they were never sent in the first place.
-  const canViewSensitive = user?.access_level === "owner";
+  // information they were never sent in the first place. Admin sees
+  // everything unredacted, same as Owner (see employeeScopeFor).
+  const canViewSensitive = user?.access_level === "owner" || user?.access_level === "admin";
   const displayName = employeeDisplayName(e);
 
   async function handleArchiveToggle() {

@@ -9,7 +9,7 @@
 // It is unrelated to "career role" (career_map_roles) — a job position like
 // "Senior Lighting Designer" that's just business content.
 
-export const ACCESS_LEVELS = ["team_member", "team_lead", "head_of_department", "owner"] as const;
+export const ACCESS_LEVELS = ["team_member", "team_lead", "head_of_department", "admin", "owner"] as const;
 export type AccessLevel = (typeof ACCESS_LEVELS)[number];
 
 export function isAccessLevel(value: unknown): value is AccessLevel {
@@ -47,9 +47,15 @@ export const CAPABILITIES = [
   "employee.archive",
   // Distinct from employee.view — exporting hands out the same sensitive
   // data as a file, not just a page view, so it's tracked as its own
-  // capability even though today's only tier granting it (owner) also
-  // grants employee.view anyway.
+  // capability even though today's only tiers granting it (admin, owner)
+  // also grant employee.view anyway.
   "employee.export",
+  // The Employee Master "Danger Zone" — a genuine, unrecoverable hard
+  // delete of every employee record. Deliberately its own capability,
+  // separate from employee.archive, so Admin ("same as Owner, minus the
+  // delete zone" — see ADDED_BY_LEVEL below) can do everything else Owner
+  // can without holding this one.
+  "employee.deleteAll",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -78,8 +84,11 @@ const ADDED_BY_LEVEL: Record<AccessLevel, Capability[]> = {
   ],
   head_of_department: ["careerrole.create", "careerrole.edit", "careerrole.archive"],
   // employee.view isn't re-listed here — already inherited from team_lead
-  // above, cumulatively.
-  owner: ["user.admin", "employee.create", "employee.edit", "employee.archive", "employee.export"],
+  // above, cumulatively. Admin holds everything Owner does except the
+  // Danger Zone (employee.deleteAll, added only at owner below) — "same as
+  // Owner but no delete zone" per the access-level spec.
+  admin: ["user.admin", "employee.create", "employee.edit", "employee.archive", "employee.export"],
+  owner: ["employee.deleteAll"],
 };
 
 const CAPS_BY_LEVEL: Record<AccessLevel, Capability[]> = (() => {

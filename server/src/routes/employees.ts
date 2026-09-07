@@ -105,8 +105,8 @@ function redact<T extends Record<string, unknown>>(detail: T): T {
 }
 
 interface EmployeeScope {
-  // null = unrestricted (Owner). Otherwise the exact set of employee ids
-  // this viewer may see at all — everyone in their reporting chain,
+  // null = unrestricted (Owner/Admin). Otherwise the exact set of employee
+  // ids this viewer may see at all — everyone in their reporting chain,
   // recursively (their reports, their reports' reports, and so on), not
   // just direct reports.
   ids: Set<string> | null;
@@ -114,7 +114,7 @@ interface EmployeeScope {
 }
 
 function employeeScopeFor(user: PublicUser): EmployeeScope {
-  if (user.access_level === "owner") return { ids: null, redacted: false };
+  if (user.access_level === "owner" || user.access_level === "admin") return { ids: null, redacted: false };
   const me = db.prepare("SELECT id FROM employees WHERE LOWER(work_email) = ?").get(user.email.toLowerCase()) as
     | { id: string }
     | undefined;
@@ -668,7 +668,7 @@ employeesRouter.post("/:id/restore", requireCap("employee.archive"), (req, res) 
 // audit_log rows for past employee actions are deliberately left in place
 // (no FK ties them to the now-gone rows) — the audit trail itself isn't
 // what's being reset here.
-employeesRouter.delete("/", requireCap("employee.archive"), (req, res) => {
+employeesRouter.delete("/", requireCap("employee.deleteAll"), (req, res) => {
   if (req.body?.confirm !== "DELETE ALL EMPLOYEE DATA") {
     res.status(400).json({ error: "Confirmation text didn't match — nothing was deleted." });
     return;
