@@ -117,6 +117,7 @@ export interface EmployeeSummary {
   english_name: string | null;
   department: string | null;
   rank: string | null;
+  function: string | null;
   office_location: string | null;
   report_to_employee: EmployeeRef | null;
   is_archived: boolean;

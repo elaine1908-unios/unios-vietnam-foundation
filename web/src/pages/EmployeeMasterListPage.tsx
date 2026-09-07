@@ -9,12 +9,13 @@ import { employeeDisplayName } from "../lib/vietnamese";
 import { OffshoreIcon } from "../components/OffshoreIcon";
 import { employeesToCsv, downloadCsv } from "../lib/employeeExport";
 
-type SortKey = "employee_code" | "name" | "department" | "rank" | "report_to" | "is_archived";
+type SortKey = "employee_code" | "name" | "department" | "function" | "rank" | "report_to" | "is_archived";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "employee_code", label: "Employee ID" },
   { key: "name", label: "Name" },
   { key: "department", label: "Department" },
+  { key: "function", label: "Function" },
   { key: "rank", label: "Career Rank" },
   { key: "report_to", label: "Report To" },
   { key: "is_archived", label: "Status" },
@@ -83,6 +84,8 @@ export function EmployeeMasterListPage() {
             return e.employee_code ?? "";
           case "department":
             return e.department ?? "";
+          case "function":
+            return e.function ?? "";
           case "rank":
             return e.rank ?? "";
           case "report_to":
@@ -286,6 +289,7 @@ export function EmployeeMasterListPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-2 text-ink-muted">{e.department || "—"}</td>
+                  <td className="px-4 py-2 text-ink-muted">{e.function || "—"}</td>
                   <td className="px-4 py-2 text-ink-muted">{rankBadge(e.rank) || "—"}</td>
                   <td className="px-4 py-2 text-ink-muted">
                     {e.report_to_employee ? (
