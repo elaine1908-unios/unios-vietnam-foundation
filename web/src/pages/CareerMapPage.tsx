@@ -254,7 +254,14 @@ export function CareerMapPage() {
               {division}
             </h2>
             <div className="border border-t-0 border-border rounded-b-md overflow-hidden">
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[32%]" />
+                  <col className="w-[30%]" />
+                  <col className="w-[12%]" />
+                  {(canEdit || canArchive) && <col className="w-[8%]" />}
+                </colgroup>
                 <thead>
                   <tr className="border-b border-border bg-surface-2 text-left text-ink-muted">
                     {COLUMNS.map((col) => (
