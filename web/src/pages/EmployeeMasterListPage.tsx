@@ -186,9 +186,6 @@ export function EmployeeMasterListPage() {
       <div className="flex items-center justify-between mb-1 gap-3">
         <h1 className="font-display font-bold text-xl">Employee Master</h1>
         <div className="flex gap-2">
-          <Link to="/employees/org-chart" className="btn-secondary">
-            Org Chart
-          </Link>
           {canEdit && (
             <button className="btn-secondary" onClick={handleSyncRoleFields} disabled={syncing} type="button">
               {syncing ? "Syncing…" : "Sync role fields from Career Map"}
