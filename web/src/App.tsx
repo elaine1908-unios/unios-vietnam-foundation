@@ -14,6 +14,7 @@ import { UserManagementPage } from "./pages/UserManagementPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
 import { EmployeeMasterListPage } from "./pages/EmployeeMasterListPage";
 import { EmployeeDashboardPage } from "./pages/EmployeeDashboardPage";
+import { EmployeeOrgChartPage } from "./pages/EmployeeOrgChartPage";
 import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
 import { EmployeeEditPage } from "./pages/EmployeeEditPage";
 import { EmployeeImportPage } from "./pages/EmployeeImportPage";
@@ -113,6 +114,14 @@ export function App() {
                 element={
                   <RequireAuth cap="employee.view">
                     <EmployeeDashboardPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/employees/org-chart"
+                element={
+                  <RequireAuth cap="employee.view">
+                    <EmployeeOrgChartPage />
                   </RequireAuth>
                 }
               />
