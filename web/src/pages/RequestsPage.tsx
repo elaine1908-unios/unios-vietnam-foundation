@@ -71,6 +71,14 @@ export function RequestsPage() {
     queryFn: () => api.get<RequestRecord[]>("/requests"),
   });
 
+  // Same query key ApprovalsPage uses, so navigating there reuses this
+  // cached fetch instead of doubling up.
+  const { data: approvals } = useQuery({
+    queryKey: ["requests", "approvals"],
+    queryFn: () => api.get<RequestRecord[]>("/requests/approvals"),
+  });
+  const pendingCount = approvals?.length ?? 0;
+
   const rows = useMemo(() => {
     let filtered = data ?? [];
     if (typeFilter) filtered = filtered.filter((r) => r.type === typeFilter);
@@ -110,7 +118,7 @@ export function RequestsPage() {
       <h1 className="font-display font-bold text-xl mb-1">Submit AL, OT & BT</h1>
       <p className="text-sm text-ink-muted mb-4">Submit an Annual Leave, Overtime, or Business Trip request.</p>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4">
         {TABS.map((t) => (
           <button
             key={t}
@@ -126,6 +134,18 @@ export function RequestsPage() {
             {REQUEST_TYPE_LABELS[t]}
           </button>
         ))}
+        <span className="w-px h-6 bg-border mx-1" />
+        <Link
+          to="/requests/approvals"
+          className="relative rounded-md border border-border px-3 py-1.5 text-sm text-ink-muted hover:bg-surface-2"
+        >
+          Approvals
+          {pendingCount > 0 && (
+            <span className="absolute -top-2 -right-2 min-w-[1.25rem] h-5 inline-flex items-center justify-center rounded-full bg-status-critical text-white text-xs font-medium px-1">
+              {pendingCount}
+            </span>
+          )}
+        </Link>
       </div>
 
       {tab === "AL" && (

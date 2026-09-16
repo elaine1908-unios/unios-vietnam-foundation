@@ -80,12 +80,6 @@ export function AppLayout() {
           <NavLink to="/my-profile" className={headerBtnClass}>
             My Profile
           </NavLink>
-          {/* Empty-state page if nothing's pending — visible to everyone
-              since anyone could be someone's assigned approver (Report To),
-              regardless of access level. */}
-          <NavLink to="/requests/approvals" className={headerBtnClass}>
-            Approvals
-          </NavLink>
           {canAdminUsers && (
             <NavLink to="/users" className={headerBtnClass}>
               User Management
