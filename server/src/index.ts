@@ -15,6 +15,7 @@ import { grammarRouter } from "./routes/grammar.js";
 import { publicRouter } from "./routes/public.js";
 import { auditRouter } from "./routes/audit.js";
 import { employeesRouter } from "./routes/employees.js";
+import { requestsRouter } from "./routes/requests.js";
 import { attachUser } from "./middleware.js";
 import { forcePasswordChangeGate } from "./forcePasswordChangeGate.js";
 
@@ -40,6 +41,7 @@ app.use("/api/job-descriptions", jobDescriptionsRouter);
 app.use("/api/grammar", grammarRouter);
 app.use("/api/audit-log", auditRouter);
 app.use("/api/employees", employeesRouter);
+app.use("/api/requests", requestsRouter);
 app.use("/api/public", publicRouter);
 
 // Production: serve the built frontend from the same process/port, so the

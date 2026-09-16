@@ -191,7 +191,16 @@ interface EmployeeInput {
   career_map_role_id?: string | null;
   report_to_employee_id?: string | null;
   is_offshore?: boolean;
-  [key: string]: string | boolean | null | undefined;
+  annual_leave_entitlement_days?: number;
+  [key: string]: string | boolean | number | null | undefined;
+}
+
+// Falls back to the schema default (12) for anything not a positive-or-zero
+// finite number — matches how a fresh employee row gets it for free via the
+// column's own DEFAULT, rather than letting a bad/missing value corrupt it.
+function resolveEntitlementDays(raw: unknown): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 12;
 }
 
 function validate(input: EmployeeInput): string | null {
@@ -697,16 +706,17 @@ employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {
     return;
   }
   const values = fieldValues(FIELDS, input, roleDerivedFields(careerMapRoleId));
+  const entitlementDays = resolveEntitlementDays(input.annual_leave_entitlement_days);
   db.prepare(
-    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, is_offshore = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, req.user!.id, req.params.id);
+    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, is_offshore = ?, annual_leave_entitlement_days = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).run(...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, entitlementDays, req.user!.id, req.params.id);
   const updated = loadDetail(req.params.id)!;
   diffAndLog(
     "employee",
     req.params.id,
     existing,
     updated,
-    [...FIELDS, "career_map_role_id", "report_to_employee_id", "is_offshore"],
+    [...FIELDS, "career_map_role_id", "report_to_employee_id", "is_offshore", "annual_leave_entitlement_days"],
     req.user!.id,
   );
   res.json(updated);

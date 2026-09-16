@@ -62,6 +62,7 @@ const EMPTY_FORM: EmployeeInput = {
   contract_no: "",
   contract_start_date: "",
   contract_end_date: "",
+  annual_leave_entitlement_days: 12,
 };
 
 function TextField({
@@ -246,6 +247,10 @@ export function EmployeeEditPage() {
     setForm((f) => ({ ...f, is_offshore: value }));
   }
 
+  function setEntitlementDays(value: number) {
+    setForm((f) => ({ ...f, annual_leave_entitlement_days: value }));
+  }
+
   function handleRoleSelect(roleId: string) {
     const role = allRoles.find((r) => r.id === roleId);
     if (!role) return;
@@ -424,6 +429,17 @@ export function EmployeeEditPage() {
           <div />
           <DateField label="Start Date" value={form.contract_start_date} onChange={(v) => set("contract_start_date", v)} />
           <DateField label="End Date" value={form.contract_end_date} onChange={(v) => set("contract_end_date", v)} />
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Annual Leave Entitlement (days/year)</span>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              step={0.5}
+              value={form.annual_leave_entitlement_days}
+              onChange={(e) => setEntitlementDays(Number(e.target.value) || 0)}
+            />
+          </label>
         </div>
       </div>
 

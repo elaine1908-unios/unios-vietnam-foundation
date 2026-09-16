@@ -166,6 +166,10 @@ export interface EmployeeDetail {
   contract_no: string | null;
   contract_start_date: string | null;
   contract_end_date: string | null;
+  // Flat annual amount, no accrual/carry-over — see routes/requests.ts's
+  // alDaysUsed for how it's actually spent against (Annual Leave-type
+  // approved requests only, scoped to the request's start-date year).
+  annual_leave_entitlement_days: number;
   // Department/Position/Rank are set only by picking a Career Map role
   // (dropdown, not free text) — this is the traceability link, same pattern
   // as ProfileDetail.career_map_role_id: department/position/rank are saved,
@@ -181,10 +185,20 @@ export interface EmployeeDetail {
   updated_at: string;
 }
 
+// annual_leave_entitlement_days is optional here (unlike EmployeeDetail,
+// where a fetched record always has one) — the CSV import path doesn't set
+// it at all, matching the server's own fallback-to-12 in resolveEntitlementDays.
 export type EmployeeInput = Omit<
   EmployeeDetail,
-  "id" | "employee_code" | "is_archived" | "created_at" | "updated_at" | "career_map_role" | "report_to_employee"
->;
+  | "id"
+  | "employee_code"
+  | "is_archived"
+  | "created_at"
+  | "updated_at"
+  | "career_map_role"
+  | "report_to_employee"
+  | "annual_leave_entitlement_days"
+> & { annual_leave_entitlement_days?: number };
 
 export interface AuditLogEntry {
   id: string;
@@ -352,4 +366,132 @@ export interface JobDescriptionTranslation {
   responsibilities: JdResponsibility[];
   requirements: JdRequirement[];
   competencies: JdCompetency[];
+}
+
+// ---------- Submit AL, OT & BT ----------
+
+export type RequestType = "AL" | "OT" | "BT";
+export const REQUEST_TYPES: RequestType[] = ["AL", "OT", "BT"];
+export const REQUEST_TYPE_LABELS: Record<RequestType, string> = {
+  AL: "Annual Leave",
+  OT: "Overtime",
+  BT: "Business Trip",
+};
+
+export type RequestStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "needs_changes"
+  | "cancellation_requested"
+  | "cancelled";
+
+export const REQUEST_STATUSES: RequestStatus[] = [
+  "draft",
+  "pending_approval",
+  "approved",
+  "rejected",
+  "needs_changes",
+  "cancellation_requested",
+  "cancelled",
+];
+
+export const REQUEST_STATUS_LABELS: Record<RequestStatus, string> = {
+  draft: "Draft",
+  pending_approval: "Pending Approval",
+  approved: "Approved",
+  rejected: "Rejected",
+  needs_changes: "Needs Changes",
+  cancellation_requested: "Cancellation Requested",
+  cancelled: "Cancelled",
+};
+
+export const LEAVE_TYPES = ["Annual Leave", "Marriage Leave - Self", "Bereavement Leave - Family", "Other Unpaid Leave"];
+export const LEAVE_DURATIONS = ["Morning", "Afternoon", "Full Day"];
+export const OT_LOCATIONS = ["Office", "Site", "Remote", "Other"];
+
+export interface RequestEmployeeRef {
+  id: string;
+  employee_code: string | null;
+  last_name: string;
+  middle_name: string | null;
+  first_name: string;
+  english_name: string | null;
+}
+
+export interface AlDetails {
+  request_id: string;
+  leave_type: string;
+  reason: string | null;
+  start_date: string;
+  return_to_work_date: string;
+  duration: string;
+  days_requested: number;
+}
+
+export interface OtDetails {
+  request_id: string;
+  ot_date: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  total_hours: number;
+  reason: string;
+  project_department: string | null;
+  location: string;
+}
+
+export interface BtDetails {
+  request_id: string;
+  destination: string;
+  purpose: string;
+  departure_at: string;
+  return_at: string;
+  days_requested: number;
+  project_client: string | null;
+  transportation_required: boolean;
+  hotel_required: boolean;
+  advance_payment_required: boolean;
+  advance_amount: number | null;
+  advance_currency: string | null;
+  advance_notes: string | null;
+  additional_notes: string | null;
+}
+
+export interface RequestHistoryEntry {
+  id: string;
+  action: string;
+  field_name: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  changed_at: string;
+  changed_by_name: string | null;
+}
+
+export interface RequestRecord {
+  id: string;
+  request_code: string | null;
+  type: RequestType;
+  employee_id: string;
+  approver_id: string | null;
+  status: RequestStatus;
+  submitted_at: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_comment: string | null;
+  cancellation_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  employee: RequestEmployeeRef | null;
+  approver: RequestEmployeeRef | null;
+  detail: AlDetails | OtDetails | BtDetails | null;
+  history: RequestHistoryEntry[];
+  viewer: {
+    can_edit: boolean;
+    can_submit: boolean;
+    can_cancel: boolean;
+    can_decide: boolean;
+    can_decide_cancellation: boolean;
+  };
 }

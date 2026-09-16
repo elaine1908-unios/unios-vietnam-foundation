@@ -37,6 +37,11 @@ export function AppLayout() {
           <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint">Careers and Foundation</p>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
+          {/* Visible to every signed-in user, same reasoning as My Profile —
+              self-service AL/OT/BT submission isn't gated by capability. */}
+          <NavLink to="/requests" className={navLinkClass}>
+            Submit AL, OT & BT
+          </NavLink>
           {canViewEmployees && (
             <NavLink to="/employees/dashboard" className={navLinkClass}>
               Employee Dashboard
@@ -74,6 +79,12 @@ export function AppLayout() {
               Emergency Contact; see GET/PATCH /employees/me. */}
           <NavLink to="/my-profile" className={headerBtnClass}>
             My Profile
+          </NavLink>
+          {/* Empty-state page if nothing's pending — visible to everyone
+              since anyone could be someone's assigned approver (Report To),
+              regardless of access level. */}
+          <NavLink to="/requests/approvals" className={headerBtnClass}>
+            Approvals
           </NavLink>
           {canAdminUsers && (
             <NavLink to="/users" className={headerBtnClass}>

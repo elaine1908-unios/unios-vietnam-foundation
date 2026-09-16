@@ -10,7 +10,15 @@ export type AuditAction =
   | "role_changed"
   | "deactivated"
   | "reactivated"
-  | "password_reset";
+  | "password_reset"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "returned_for_edit"
+  | "cancelled"
+  | "cancellation_requested"
+  | "cancellation_confirmed"
+  | "cancellation_denied";
 
 export function logAudit(
   entityType: string,
