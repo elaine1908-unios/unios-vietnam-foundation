@@ -20,10 +20,14 @@ export function AppLayout() {
   const canAdminUsers = user?.capabilities.includes("user.admin") ?? false;
   const canViewEmployees = user?.capabilities.includes("employee.view") ?? false;
   // Employee Master's own NavLink can't use its default prefix match here —
-  // /employees/dashboard lives under the same "/employees" prefix but is its
-  // own top-level nav item now, so it needs to be excluded explicitly rather
-  // than also lighting up Employee Master.
-  const employeeMasterActive = pathname.startsWith("/employees") && !pathname.startsWith("/employees/dashboard");
+  // /employees/dashboard and /employees/org-chart live under the same
+  // "/employees" prefix but are their own top-level nav items now, so they
+  // need to be excluded explicitly rather than also lighting up Employee
+  // Master.
+  const employeeMasterActive =
+    pathname.startsWith("/employees") &&
+    !pathname.startsWith("/employees/dashboard") &&
+    !pathname.startsWith("/employees/org-chart");
 
   return (
     <div className="min-h-screen flex">
@@ -53,6 +57,11 @@ export function AppLayout() {
             <Link to="/employees" className={navLinkClass({ isActive: employeeMasterActive })}>
               Employee Master
             </Link>
+          )}
+          {canViewEmployees && (
+            <NavLink to="/employees/org-chart" className={navLinkClass}>
+              Org Chart
+            </NavLink>
           )}
         </nav>
       </aside>
