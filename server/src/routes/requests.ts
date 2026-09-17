@@ -511,14 +511,23 @@ function validateImportRow(type: RequestType, raw: Record<string, string>, rowNu
     return { row: rowNumber, error: "Departure Date must be a valid date (YYYY-MM-DD)." };
   }
   if (!isValidIsoDate(returnDateRaw)) return { row: rowNumber, error: "Return Date must be a valid date (YYYY-MM-DD)." };
-  // Historical data rarely records exact times — a fixed 09:00/18:00 is
+  // Departure/Return Time are optional — historical data doesn't always
+  // record exact times, so a blank one falls back to a fixed 09:00/18:00,
   // just enough time-of-day to keep departure_at/return_at's stored shape
-  // consistent with a live BT submission; calcBtDays only reads the date
-  // part of each anyway.
-  const departureAt = `${departureDate}T09:00`;
-  const returnAt = `${returnDateRaw}T18:00`;
+  // consistent with a live BT submission (calcBtDays only reads the date
+  // part of each anyway, regardless of which time ends up here).
+  const departureTimeRaw = (raw["Departure Time"] ?? "").trim();
+  const returnTimeRaw = (raw["Return Time"] ?? "").trim();
+  if (departureTimeRaw && !isValidTime(departureTimeRaw)) {
+    return { row: rowNumber, error: "Departure Time must be in HH:MM (24-hour) format." };
+  }
+  if (returnTimeRaw && !isValidTime(returnTimeRaw)) {
+    return { row: rowNumber, error: "Return Time must be in HH:MM (24-hour) format." };
+  }
+  const departureAt = `${departureDate}T${departureTimeRaw || "09:00"}`;
+  const returnAt = `${returnDateRaw}T${returnTimeRaw || "18:00"}`;
   if (new Date(returnAt) <= new Date(departureAt)) {
-    return { row: rowNumber, error: "Return Date must be on or after Departure Date." };
+    return { row: rowNumber, error: "Return Date/Time must be after Departure Date/Time." };
   }
   const advancePaymentRequired = parseImportBool(raw["Advance Payment Required"]);
   const advanceAmountRaw = (raw["Advance Amount"] ?? "").trim();

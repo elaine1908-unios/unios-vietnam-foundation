@@ -24,7 +24,9 @@ const COLUMNS: Record<RequestType, string[]> = {
     "Destination",
     "Purpose",
     "Departure Date",
+    "Departure Time",
     "Return Date",
+    "Return Time",
     "Project/Client",
     "Transportation Required",
     "Hotel Required",
@@ -40,11 +42,22 @@ const COLUMNS: Record<RequestType, string[]> = {
 // beats a header-only file for showing the expected enum spellings
 // (Leave Type, Duration, Location) and date/time formats.
 // Only these columns actually block a row when missing/invalid — every
-// other column in COLUMNS is nice-to-have context or, for AL's "Treat
-// Weekend as Working Day", an opt-in override (see calcAlDays on the
-// server) rather than something every row needs to set.
+// other column in COLUMNS is nice-to-have context or an opt-in override
+// (AL's "Treat Weekend as Working Day", see calcAlDays on the server) or
+// a default that only needs setting when it doesn't apply (BT's
+// Departure/Return Time, which default to 09:00/18:00 when blank).
 const OPTIONAL_COLUMNS: Partial<Record<RequestType, string[]>> = {
   AL: ["Treat Weekend as Working Day"],
+  BT: ["Departure Time", "Return Time"],
+};
+
+// The full sentence shown under the required-columns line for a type with
+// optional columns — kept separate from OPTIONAL_COLUMNS since each type's
+// optional columns need their own explanation, not a one-size-fits-all
+// "Yes/No" description.
+const OPTIONAL_COLUMN_NOTES: Partial<Record<RequestType, string>> = {
+  AL: "Optional: Treat Weekend as Working Day (Yes/No — leave blank for No). A Yes counts every day in the request's range as a working day instead of skipping Saturdays/Sundays, for a day that was actually worked.",
+  BT: "Optional: Departure Time, Return Time (HH:MM, 24-hour — leave blank to default to 09:00 departure / 18:00 return).",
 };
 
 const EXAMPLE_ROW: Record<RequestType, string[]> = {
@@ -55,7 +68,9 @@ const EXAMPLE_ROW: Record<RequestType, string[]> = {
     "Hanoi",
     "Client workshop",
     "2026-02-10",
+    "08:00",
     "2026-02-12",
+    "20:00",
     "Acme Corp",
     "Yes",
     "Yes",
@@ -196,14 +211,7 @@ export function ImportRequestsPage() {
         <p className="text-xs text-ink-faint">
           Required columns: {columns.filter((c) => !OPTIONAL_COLUMNS[type]?.includes(c)).join(", ")}. Work Email
           must match an existing employee record.
-          {OPTIONAL_COLUMNS[type] && OPTIONAL_COLUMNS[type]!.length > 0 && (
-            <>
-              {" "}
-              Optional: {OPTIONAL_COLUMNS[type]!.join(", ")} (Yes/No — leave blank for No). For Annual Leave, a Yes
-              counts every day in the request's range as a working day instead of skipping Saturdays/Sundays, for a
-              day that was actually worked.
-            </>
-          )}
+          {OPTIONAL_COLUMN_NOTES[type] && <> {OPTIONAL_COLUMN_NOTES[type]}</>}
         </p>
       </div>
 
