@@ -19,6 +19,8 @@ In production the Express server also serves the built frontend, so the whole ap
 - **Owner** — the above, plus all user account administration (create accounts, change access levels, deactivate/reactivate, reset passwords) and the Audit Log.
 - **Public / logged out** — the one unauthenticated surface: `/careers`, showing only Job Descriptions flagged **Now Hiring**. See "Public careers page" below.
 
+See [`docs/security-architecture.md`](docs/security-architecture.md) for the full write-up of authentication, 2FA, RBAC enforcement, and account-administration rules (this section predates several access levels and features — e.g. Admin, two-factor auth — that doc reflects the current state).
+
 There's no self-service sign-up — an Owner creates every account from the **User Management** screen (name, email, initial password, access level), which is a chicken-and-egg problem for the very first account. See step 1 below for how that one gets created.
 
 **Forced password change** — every account created by someone else (including an Owner-issued password reset) starts with `must_change_password` set, and an app-wide gate (`server/src/forcePasswordChangeGate.ts`, mounted ahead of every router except the self-service `/auth/*` endpoints) refuses everything else until they set their own. The client mirrors this in `RequireAuth.tsx`, the one wrapper every authenticated route passes through.
