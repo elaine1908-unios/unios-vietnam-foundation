@@ -113,6 +113,22 @@ function sortedKeys(map: Map<string, unknown>, fallbackLast: string): string[] {
   });
 }
 
+// Leadership is a cross-cutting function, not tied to one department's usual
+// alphabetical position — it's pinned first within every department so it
+// reads the same way the Career Map already treats Leadership as sitting
+// above the rest, regardless of what else that department has.
+const LEADERSHIP_FUNCTION = "Leadership";
+
+function sortedFunctionKeys(map: Map<string, unknown>, fallbackLast: string): string[] {
+  return [...map.keys()].sort((a, b) => {
+    if (a === LEADERSHIP_FUNCTION) return b === LEADERSHIP_FUNCTION ? 0 : -1;
+    if (b === LEADERSHIP_FUNCTION) return 1;
+    if (a === fallbackLast) return 1;
+    if (b === fallbackLast) return -1;
+    return a.localeCompare(b);
+  });
+}
+
 function EmployeeChip({ e }: { e: EmployeeSummary }) {
   return (
     <Link
@@ -147,7 +163,7 @@ function DeptFunctionChart({ employees }: { employees: EmployeeSummary[] }) {
         const deptEmployees = byDept.get(dept)!;
         const collapsed = collapsedDepts.has(dept);
         const byFunction = groupBy(deptEmployees, (e) => e.function || "No function set");
-        const functionKeys = sortedKeys(byFunction, "No function set");
+        const functionKeys = sortedFunctionKeys(byFunction, "No function set");
         return (
           <div key={dept}>
             <button
@@ -201,7 +217,7 @@ function DeptFunctionChart({ employees }: { employees: EmployeeSummary[] }) {
 }
 
 export function EmployeeOrgChartPage() {
-  const [view, setView] = useState<"report-to" | "department">("report-to");
+  const [view, setView] = useState<"report-to" | "department">("department");
   const { data, isLoading, error } = useQuery({
     queryKey: ["employees", "org-chart"],
     queryFn: () => api.get<EmployeeSummary[]>("/employees"),
