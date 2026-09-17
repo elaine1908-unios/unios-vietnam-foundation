@@ -8,6 +8,8 @@ import { api, ApiError } from "../lib/api";
 import type { CodeOfConductSectionDetail } from "../lib/types";
 import { useAuth } from "../auth/AuthProvider";
 
+type Lang = "vi" | "en";
+
 function ToolbarButton({
   onClick,
   active,
@@ -32,6 +34,9 @@ function ToolbarButton({
   );
 }
 
+// Keyed by lang from the caller so switching language while editing remounts
+// this with the other language's content — TipTap's `content` prop only
+// seeds the initial document, it isn't reactive on its own.
 function Editor({ content, onChange }: { content: string; onChange: (html: string) => void }) {
   const editor = useEditor({
     extensions: [StarterKit],
@@ -83,14 +88,37 @@ function Editor({ content, onChange }: { content: string; onChange: (html: strin
   );
 }
 
+function LangToggle({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+  return (
+    <div className="flex rounded-md border border-border overflow-hidden text-sm shrink-0">
+      <button
+        className={`px-3 py-1.5 ${lang === "vi" ? "bg-accent text-white" : "bg-surface text-ink-muted"}`}
+        onClick={() => setLang("vi")}
+        type="button"
+      >
+        Tiếng Việt
+      </button>
+      <button
+        className={`px-3 py-1.5 ${lang === "en" ? "bg-accent text-white" : "bg-surface text-ink-muted"}`}
+        onClick={() => setLang("en")}
+        type="button"
+      >
+        English
+      </button>
+    </div>
+  );
+}
+
 export function CodeOfConductSectionPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const canEdit = user?.capabilities.includes("codeofconduct.edit") ?? false;
+  const [lang, setLang] = useState<Lang>("vi");
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [contentEn, setContentEn] = useState("");
+  const [contentVi, setContentVi] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,7 +131,8 @@ export function CodeOfConductSectionPage() {
   useEffect(() => {
     if (section) {
       setTitle(section.title);
-      setContent(section.content);
+      setContentEn(section.content_en);
+      setContentVi(section.content_vi);
     }
   }, [section]);
 
@@ -112,7 +141,8 @@ export function CodeOfConductSectionPage() {
 
   function startEdit() {
     setTitle(section!.title);
-    setContent(section!.content);
+    setContentEn(section!.content_en);
+    setContentVi(section!.content_vi);
     setError(null);
     setEditing(true);
   }
@@ -121,7 +151,7 @@ export function CodeOfConductSectionPage() {
     setSaving(true);
     setError(null);
     try {
-      await api.patch(`/code-of-conduct/sections/${id}`, { title, content });
+      await api.patch(`/code-of-conduct/sections/${id}`, { title, content_en: contentEn, content_vi: contentVi });
       await queryClient.invalidateQueries({ queryKey: ["code-of-conduct"] });
       setEditing(false);
     } catch (err) {
@@ -130,6 +160,8 @@ export function CodeOfConductSectionPage() {
       setSaving(false);
     }
   }
+
+  const viewContent = lang === "vi" ? section.content_vi : section.content_en;
 
   return (
     <div className="max-w-3xl">
@@ -142,11 +174,14 @@ export function CodeOfConductSectionPage() {
         ) : (
           <h1 className="font-display font-bold text-xl">{section.title}</h1>
         )}
-        {canEdit && !editing && (
-          <button className="btn-secondary shrink-0" onClick={startEdit} type="button">
-            Edit
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <LangToggle lang={lang} setLang={setLang} />
+          {canEdit && !editing && (
+            <button className="btn-secondary" onClick={startEdit} type="button">
+              Edit
+            </button>
+          )}
+        </div>
       </div>
       <p className="text-sm text-ink-muted mb-4">
         Version {section.document.version} · {section.document.version_date}
@@ -160,7 +195,11 @@ export function CodeOfConductSectionPage() {
 
       {editing ? (
         <>
-          <Editor content={content} onChange={setContent} />
+          {lang === "vi" ? (
+            <Editor key="vi" content={contentVi} onChange={setContentVi} />
+          ) : (
+            <Editor key="en" content={contentEn} onChange={setContentEn} />
+          )}
           {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
           <div className="flex gap-2 mt-3">
             <button className="btn-primary" onClick={save} disabled={saving} type="button">
@@ -172,10 +211,7 @@ export function CodeOfConductSectionPage() {
           </div>
         </>
       ) : (
-        <div
-          className="prose-cc card"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(section.content) }}
-        />
+        <div className="prose-cc card" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(viewContent) }} />
       )}
     </div>
   );

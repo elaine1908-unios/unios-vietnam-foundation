@@ -65,31 +65,32 @@ codeOfConductRouter.get("/sections/:id", (req, res) => {
 
 codeOfConductRouter.patch("/sections/:id", requireCap("codeofconduct.edit"), (req, res) => {
   const existing = db.prepare("SELECT * FROM code_of_conduct_sections WHERE id = ?").get(req.params.id) as
-    | { id: string; title: string; content: string }
+    | { id: string; title: string; content_en: string; content_vi: string }
     | undefined;
   if (!existing) {
     res.status(404).json({ error: "Section not found." });
     return;
   }
-  const { title, content } = req.body as { title?: string; content?: string };
+  const { title, content_en, content_vi } = req.body as { title?: string; content_en?: string; content_vi?: string };
   if (!title?.trim()) {
     res.status(400).json({ error: "Title is required." });
     return;
   }
-  const cleanContent = DOMPurify.sanitize(content ?? "");
+  const cleanEn = DOMPurify.sanitize(content_en ?? "");
+  const cleanVi = DOMPurify.sanitize(content_vi ?? "");
   const document = loadDocument();
   const newVersion = document ? bumpVersion(document.version) : "1.0";
   const today = new Date().toISOString().slice(0, 10);
 
   db.prepare(
-    "UPDATE code_of_conduct_sections SET title = ?, content = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?",
-  ).run(title.trim(), cleanContent, req.user!.id, existing.id);
+    "UPDATE code_of_conduct_sections SET title = ?, content_en = ?, content_vi = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?",
+  ).run(title.trim(), cleanEn, cleanVi, req.user!.id, existing.id);
   diffAndLog(
     "code_of_conduct_section",
     existing.id,
     existing,
-    { title: title.trim(), content: cleanContent },
-    ["title", "content"],
+    { title: title.trim(), content_en: cleanEn, content_vi: cleanVi },
+    ["title", "content_en", "content_vi"],
     req.user!.id,
   );
 

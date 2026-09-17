@@ -516,7 +516,8 @@ export interface CodeOfConductSectionDetail {
   id: string;
   sort_order: number;
   title: string;
-  content: string;
+  content_en: string;
+  content_vi: string;
   updated_at: string;
   updated_by: string | null;
   updated_by_name: string | null;
