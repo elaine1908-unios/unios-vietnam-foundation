@@ -26,6 +26,9 @@ export interface UserRow {
   is_active: number;
   must_change_password: number;
   password_hash: string | null;
+  totp_secret: string | null;
+  totp_enabled: number;
+  totp_enabled_at: string | null;
   created_at: string;
 }
 
@@ -36,6 +39,7 @@ export interface PublicUser {
   access_level: AccessLevel;
   is_active: boolean;
   must_change_password: boolean;
+  has_2fa: boolean;
   created_at: string;
   // The effective capability list for this user's access_level — computed
   // here, once, server-side. The client drives navigation off this instead
@@ -67,6 +71,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     access_level: row.access_level,
     is_active: Boolean(row.is_active),
     must_change_password: Boolean(row.must_change_password),
+    has_2fa: Boolean(row.totp_enabled),
     created_at: row.created_at,
     capabilities: capabilitiesFor(row.access_level),
   };

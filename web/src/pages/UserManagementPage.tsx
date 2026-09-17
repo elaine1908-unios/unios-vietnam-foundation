@@ -162,6 +162,16 @@ export function UserManagementPage() {
     }
   }
 
+  async function resetTwoFactor(id: string, name: string) {
+    if (!confirm(`Turn off 2FA for ${name}? They'll need to set it up again from their own account.`)) return;
+    try {
+      await api.post(`/users/${id}/reset-2fa`);
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Something went wrong.");
+    }
+  }
+
   return (
     <div className="max-w-7xl">
       <h1 className="font-display font-bold text-xl mb-1">User management</h1>
@@ -313,6 +323,11 @@ export function UserManagementPage() {
                         <button className="text-sm text-accent" onClick={() => resetPassword(u.id, u.name)}>
                           Reset password
                         </button>
+                        {u.has_2fa && (u.access_level !== "owner" || me?.access_level === "owner") && (
+                          <button className="text-sm text-accent" onClick={() => resetTwoFactor(u.id, u.name)}>
+                            Reset 2FA
+                          </button>
+                        )}
                         {u.id !== me?.id &&
                           (u.is_active ? (
                             <button className="text-sm text-red-600" onClick={() => deactivate(u.id)}>

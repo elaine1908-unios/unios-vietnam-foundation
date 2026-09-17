@@ -5,12 +5,16 @@ import { UniosLogo } from "../components/UniosLogo";
 import { api } from "../lib/api";
 
 export function LoginPage() {
-  const { user, loading, signIn } = useAuth();
+  const { user, loading, signIn, completeTwoFactor } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
+  // Set once the password check succeeds on an account with 2FA enabled —
+  // switches the form to "enter your code" instead of completing sign-in.
+  const [tempToken, setTempToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     api
@@ -35,6 +39,19 @@ export function LoginPage() {
     setError(null);
     const result = await signIn(email, password);
     setSubmitting(false);
+    if (result.error) {
+      setError(result.error);
+    } else if (result.requires2fa) {
+      setTempToken(result.tempToken);
+    }
+  }
+
+  async function handleTwoFactorSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    const result = await completeTwoFactor(tempToken!, code);
+    setSubmitting(false);
     if (result.error) setError(result.error);
   }
 
@@ -47,31 +64,63 @@ export function LoginPage() {
         </p>
         <p className="text-sm text-ink-muted mb-6">Career Portal - for Unios Vietnam team only</p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <input
-            className="input"
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button className="btn-primary mt-2" type="submit" disabled={submitting}>
-            {submitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-        <p className="text-xs text-ink-faint mt-4">
-          Don't have an account? Ask your head of department to create one for you.
-        </p>
+        {tempToken ? (
+          <form onSubmit={handleTwoFactorSubmit} className="flex flex-col gap-2">
+            <p className="text-sm text-ink-muted mb-1">Enter the 6-digit code from your authenticator app.</p>
+            <input
+              className="input"
+              inputMode="numeric"
+              placeholder="6-digit code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoFocus
+              required
+            />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <button className="btn-primary mt-2" type="submit" disabled={submitting}>
+              {submitting ? "Verifying…" : "Verify"}
+            </button>
+            <button
+              className="text-sm text-ink-muted hover:text-ink"
+              type="button"
+              onClick={() => {
+                setTempToken(null);
+                setCode("");
+                setError(null);
+              }}
+            >
+              ← Back to sign in
+            </button>
+          </form>
+        ) : (
+          <>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+              <input
+                className="input"
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <input
+                className="input"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <button className="btn-primary mt-2" type="submit" disabled={submitting}>
+                {submitting ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+            <p className="text-xs text-ink-faint mt-4">
+              Don't have an account? Ask your head of department to create one for you.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

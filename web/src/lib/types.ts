@@ -74,6 +74,7 @@ export interface User {
   access_level: AccessLevel;
   is_active: boolean;
   must_change_password: boolean;
+  has_2fa: boolean;
   created_at: string;
   // Effective capability list for this user's access_level, computed
   // server-side (see toPublicUser in server/src/types.ts) — drives

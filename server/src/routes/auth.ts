@@ -1,6 +1,16 @@
 import { Router } from "express";
+import { verify as verifyTotp } from "otplib";
 import { db } from "../db.js";
-import { signSession, verifyPassword, hashPassword, isLegacyScryptHash, verifyLegacyScryptPassword } from "../auth.js";
+import {
+  signSession,
+  verifyPassword,
+  hashPassword,
+  isLegacyScryptHash,
+  verifyLegacyScryptPassword,
+  signTwoFactorToken,
+  verifyTwoFactorToken,
+  decryptSecret,
+} from "../auth.js";
 import { newId } from "../ids.js";
 import { requireAuth } from "../middleware.js";
 import { logAudit } from "../audit.js";
@@ -88,6 +98,41 @@ authRouter.post("/login", (req, res) => {
   }
   if (!user.is_active) {
     res.status(403).json({ error: "This account has been deactivated. Contact a BOD member." });
+    return;
+  }
+  if (user.totp_enabled) {
+    // Not a session yet — just proof the password check passed. The real
+    // session is only issued once POST /login/2fa verifies the code.
+    res.json({ requires2fa: true, temp_token: signTwoFactorToken(user.id) });
+    return;
+  }
+  res.cookie("session", signSession(user.id), SESSION_COOKIE);
+  res.json(toPublicUser(user));
+});
+
+// Second step of login for an account with 2FA enabled — see the
+// requires2fa branch above. temp_token proves the password was already
+// verified; it can never be used to authenticate a normal route (see the
+// `purpose` check in verifySession).
+authRouter.post("/login/2fa", async (req, res) => {
+  const { temp_token, code } = req.body ?? {};
+  if (!temp_token || !code) {
+    res.status(400).json({ error: "A code is required." });
+    return;
+  }
+  const userId = verifyTwoFactorToken(String(temp_token));
+  if (!userId) {
+    res.status(401).json({ error: "This sign-in attempt has expired — please sign in again." });
+    return;
+  }
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId) as UserRow | undefined;
+  if (!user || !user.is_active || !user.totp_enabled || !user.totp_secret) {
+    res.status(401).json({ error: "This sign-in attempt has expired — please sign in again." });
+    return;
+  }
+  const result = await verifyTotp({ secret: decryptSecret(user.totp_secret), token: String(code).trim(), epochTolerance: 30 });
+  if (!result.valid) {
+    res.status(401).json({ error: "That code doesn't match. Check the time on your device and try again." });
     return;
   }
   res.cookie("session", signSession(user.id), SESSION_COOKIE);

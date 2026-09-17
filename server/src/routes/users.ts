@@ -200,3 +200,25 @@ usersRouter.post("/:id/reset-password", (req, res) => {
   logAudit("user", target.id, "password_reset", req.user!.id, "password", "<hidden>", "<reset>");
   res.json({ ok: true });
 });
+
+// For someone locked out of their authenticator app — there are no backup
+// codes (see ADR in the 2FA plan), so this is the only way back in. Same
+// BOD-only-for-BOD-target boundary as the password reset above: turning off
+// a BOD member's second factor is just as sensitive as resetting their
+// password.
+usersRouter.post("/:id/reset-2fa", (req, res) => {
+  const target = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as unknown as UserRow | undefined;
+  if (!target) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  if (target.access_level === "owner" && req.user!.access_level !== "owner") {
+    res.status(403).json({ error: "Only a BOD member can reset another BOD member's 2FA." });
+    return;
+  }
+  db.prepare("UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_enabled_at = NULL WHERE id = ?").run(
+    target.id,
+  );
+  logAudit("user", target.id, "updated", req.user!.id, "totp_enabled", String(Boolean(target.totp_enabled)), "false");
+  res.json(toPublicUser(db.prepare("SELECT * FROM users WHERE id = ?").get(target.id) as unknown as UserRow));
+});
