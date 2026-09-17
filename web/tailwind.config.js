@@ -32,6 +32,11 @@ export default {
         "status-critical-soft": "#F6E3E1",
         "status-info": "#2F6F8F",
         "status-info-soft": "#E2EBEF",
+        // New accent tokens, added on request — no established semantic
+        // meaning yet. Not (yet) mirrored in po-so-tracker's config.
+        "accent-green": "#7CBF7C",
+        "accent-lavender": "#D3D3F2",
+        "accent-periwinkle": "#7F7FFF",
         surface: "#FFFFFF",
         "surface-2": "#F7F7F7",
         border: "#E5E5E5",
