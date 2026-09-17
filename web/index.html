@@ -3,6 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Internal tool — /careers is the one deliberately public page (see
+         App.tsx), but it's not meant to be discoverable via search; every
+         other route is auth-walled anyway, so a search engine could never
+         index it regardless. -->
+    <meta name="robots" content="noindex, nofollow" />
     <title>Performance Profiles</title>
   </head>
   <body class="bg-bg text-ink">

@@ -65,6 +65,10 @@ usersRouter.post("/", (req, res) => {
     res.status(400).json({ error: "No active employee found with this Work Email — add them to Employee Master first." });
     return;
   }
+  if (access_level === "owner" && req.user!.access_level !== "owner") {
+    res.status(403).json({ error: "Only a BOD member can create another BOD account." });
+    return;
+  }
   const name = employeeDisplayName(employee);
   // An unknown level falls back to the least privileged on create (as
   // opposed to PATCH below, which rejects one outright) — see spec section 7.
@@ -114,6 +118,13 @@ usersRouter.patch("/:id", (req, res) => {
   const { access_level } = req.body as { access_level?: string };
   if (!isAccessLevel(access_level)) {
     res.status(400).json({ error: INVALID_LEVEL_MESSAGE });
+    return;
+  }
+  // Only a BOD member may grant BOD access — otherwise an Admin could
+  // promote themselves (or anyone) straight past the "same as Owner but no
+  // Danger Zone" boundary this level is supposed to stop at.
+  if (access_level === "owner" && req.user!.access_level !== "owner") {
+    res.status(403).json({ error: "Only a BOD member can grant BOD access." });
     return;
   }
   const target = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as unknown as UserRow | undefined;
@@ -173,6 +184,13 @@ usersRouter.post("/:id/reset-password", (req, res) => {
   const target = db.prepare("SELECT * FROM users WHERE id = ?").get(req.params.id) as unknown as UserRow | undefined;
   if (!target) {
     res.status(404).json({ error: "User not found." });
+    return;
+  }
+  // Resetting a BOD account's password is effectively taking it over (the
+  // resetter knows the new password) — only another BOD member may do this,
+  // same boundary as granting BOD access above.
+  if (target.access_level === "owner" && req.user!.access_level !== "owner") {
+    res.status(403).json({ error: "Only a BOD member can reset another BOD member's password." });
     return;
   }
   db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?").run(

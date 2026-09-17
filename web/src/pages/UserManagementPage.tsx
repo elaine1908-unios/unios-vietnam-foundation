@@ -18,6 +18,11 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 export function UserManagementPage() {
   const { user: me } = useAuth();
   const queryClient = useQueryClient();
+  // Only a BOD member can grant BOD access — the server enforces this (see
+  // POST / and PATCH /:id in routes/users.ts); this just keeps the option
+  // from being offered in the first place instead of failing with a 403.
+  const assignableLevels: AccessLevel[] =
+    me?.access_level === "owner" ? [...ACCESS_LEVELS] : ACCESS_LEVELS.filter((l) => l !== "owner");
   const { data, isLoading, error } = useQuery({
     queryKey: ["users"],
     queryFn: () => api.get<User[]>("/users"),
@@ -198,7 +203,7 @@ export function UserManagementPage() {
           required
         />
         <select className="input" value={accessLevel} onChange={(e) => setAccessLevel(e.target.value as AccessLevel)}>
-          {ACCESS_LEVELS.map((l) => (
+          {assignableLevels.map((l) => (
             <option key={l} value={l}>
               {ACCESS_LEVEL_LABELS[l]}
             </option>
@@ -279,7 +284,10 @@ export function UserManagementPage() {
                         value={u.access_level}
                         onChange={(e) => setLevelFor(u.id, e.target.value as AccessLevel)}
                       >
-                        {ACCESS_LEVELS.map((l) => (
+                        {/* Include the row's current level even if it's "owner" and the
+                            viewer isn't BOD — otherwise an existing BOD row would show
+                            blank. It can still only be *set to* owner by a BOD viewer. */}
+                        {(assignableLevels.includes(u.access_level) ? assignableLevels : [u.access_level, ...assignableLevels]).map((l) => (
                           <option key={l} value={l}>
                             {ACCESS_LEVEL_LABELS[l]}
                           </option>
