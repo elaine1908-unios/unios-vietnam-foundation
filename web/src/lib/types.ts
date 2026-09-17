@@ -32,7 +32,9 @@ export type Capability =
   | "employee.archive"
   | "employee.export"
   | "employee.deleteAll"
-  | "codeofconduct.edit";
+  | "codeofconduct.edit"
+  | "request.manageAll"
+  | "request.import";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 
@@ -496,6 +498,33 @@ export interface RequestRecord {
     can_decide: boolean;
     can_decide_cancellation: boolean;
   };
+}
+
+export interface RequestManageSummaryEntry {
+  employee_id: string;
+  employee: RequestEmployeeRef;
+  al_used: number;
+  al_entitlement: number;
+  ot_hours: number;
+  bt_trips: number;
+  bt_days: number;
+}
+
+export interface RequestManageResponse {
+  year: string;
+  summary: RequestManageSummaryEntry[];
+  requests: RequestRecord[];
+}
+
+export interface ImportRowError {
+  row: number;
+  error: string;
+}
+
+export interface ImportResult {
+  imported?: number;
+  error?: string;
+  rowErrors?: ImportRowError[];
 }
 
 export interface DashboardLeaveEntry {

@@ -19,6 +19,7 @@ export function AppLayout() {
   const { pathname } = useLocation();
   const canAdminUsers = user?.capabilities.includes("user.admin") ?? false;
   const canViewEmployees = user?.capabilities.includes("employee.view") ?? false;
+  const canManageRequests = user?.capabilities.includes("request.manageAll") ?? false;
   // Employee Master's own NavLink can't use its default prefix match here —
   // /employees/dashboard and /employees/org-chart live under the same
   // "/employees" prefix but are their own top-level nav items now, so they
@@ -42,6 +43,11 @@ export function AppLayout() {
           <NavLink to="/requests" className={navLinkClass}>
             Submit AL, OT & BT
           </NavLink>
+          {canManageRequests && (
+            <NavLink to="/requests/manage" className={navLinkClass}>
+              Manage AL, OT & BT
+            </NavLink>
+          )}
           {canViewEmployees && (
             <NavLink to="/employees/dashboard" className={navLinkClass}>
               Employee Dashboard

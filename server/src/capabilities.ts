@@ -60,6 +60,19 @@ export const CAPABILITIES = [
   // grant for the same "universal read" reasoning) — this is the edit
   // capability specifically.
   "codeofconduct.edit",
+  // Oversight over AL/OT/BT requests beyond your own — the "Manage AL, OT
+  // & BT" page. Distinct from being an *approver* (any manager can approve
+  // their own reports' requests without this) — this is the broader
+  // "see a summary + full history for everyone in scope" view, scoped the
+  // same way Employee Master is (see employeeScopeFor in routes/employees.ts).
+  "request.manageAll",
+  // Bulk-loading historical AL/OT/BT requests that bypass the normal
+  // draft -> submit -> approve workflow — deliberately its own capability,
+  // narrower than request.manageAll (Admin/BOD only, not Head of
+  // Department), since importing already-decided records is a
+  // data-integrity-sensitive action, same tier as employee.create's CSV
+  // import.
+  "request.import",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -86,12 +99,20 @@ const ADDED_BY_LEVEL: Record<AccessLevel, Capability[]> = {
     "jobdescription.archive",
     "employee.view",
   ],
-  head_of_department: ["careerrole.create", "careerrole.edit", "careerrole.archive"],
+  head_of_department: ["careerrole.create", "careerrole.edit", "careerrole.archive", "request.manageAll"],
   // employee.view isn't re-listed here — already inherited from team_lead
   // above, cumulatively. Admin holds everything Owner does except the
   // Danger Zone (employee.deleteAll, added only at owner below) — "same as
   // Owner but no delete zone" per the access-level spec.
-  admin: ["user.admin", "employee.create", "employee.edit", "employee.archive", "employee.export", "codeofconduct.edit"],
+  admin: [
+    "user.admin",
+    "employee.create",
+    "employee.edit",
+    "employee.archive",
+    "employee.export",
+    "codeofconduct.edit",
+    "request.import",
+  ],
   owner: ["employee.deleteAll"],
 };
 

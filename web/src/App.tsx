@@ -10,6 +10,8 @@ import { MyProfilePage } from "./pages/MyProfilePage";
 import { RequestsPage } from "./pages/RequestsPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
+import { ManageRequestsPage } from "./pages/ManageRequestsPage";
+import { ImportRequestsPage } from "./pages/ImportRequestsPage";
 import { CodeOfConductPage } from "./pages/CodeOfConductPage";
 import { CodeOfConductSectionPage } from "./pages/CodeOfConductSectionPage";
 import { CodeOfConductVersionHistoryPage } from "./pages/CodeOfConductVersionHistoryPage";
@@ -60,6 +62,22 @@ export function App() {
               <Route path="/my-profile" element={<MyProfilePage />} />
               <Route path="/requests" element={<RequestsPage />} />
               <Route path="/requests/approvals" element={<ApprovalsPage />} />
+              <Route
+                path="/requests/manage"
+                element={
+                  <RequireAuth cap="request.manageAll">
+                    <ManageRequestsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/requests/import"
+                element={
+                  <RequireAuth cap="request.import">
+                    <ImportRequestsPage />
+                  </RequireAuth>
+                }
+              />
               <Route path="/requests/:id" element={<RequestDetailPage />} />
               <Route path="/code-of-conduct" element={<CodeOfConductPage />} />
               <Route path="/code-of-conduct/history" element={<CodeOfConductVersionHistoryPage />} />

@@ -18,7 +18,8 @@ export type AuditAction =
   | "cancelled"
   | "cancellation_requested"
   | "cancellation_confirmed"
-  | "cancellation_denied";
+  | "cancellation_denied"
+  | "imported";
 
 export function logAudit(
   entityType: string,

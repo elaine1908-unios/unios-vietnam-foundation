@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { db, transaction } from "../db.js";
 import { newId } from "../ids.js";
-import { requireAuth } from "../middleware.js";
+import { requireAuth, requireCap } from "../middleware.js";
 import { logAudit } from "../audit.js";
 import { employeeScopeFor } from "./employees.js";
+import { hasCapability } from "../capabilities.js";
 import type { PublicUser } from "../types.js";
 
 export const requestsRouter = Router();
@@ -209,8 +210,19 @@ function loadDetail(
   };
 }
 
+// Anyone holding request.manageAll (Head of Department and up — see
+// capabilities.ts) can view any request from an employee in their
+// employeeScopeFor scope, same reasoning as isAdminOversight above but
+// scoped instead of unconditional. This is read access only — loadDetail's
+// `viewer` flags are still computed from actual employee_id/approver_id
+// match, so a Head of Department viewing a report's request they didn't
+// personally approve sees it with no decide/cancel buttons, same as before.
 function canView(req: Record<string, unknown>, employeeId: string | undefined, user: PublicUser): boolean {
   if (isAdminOversight(user)) return true;
+  if (hasCapability(user.access_level, "request.manageAll")) {
+    const scope = employeeScopeFor(user);
+    if (scope.ids === null || scope.ids.has(req.employee_id as string)) return true;
+  }
   if (!employeeId) return false;
   return req.employee_id === employeeId || req.approver_id === employeeId;
 }
@@ -364,6 +376,204 @@ function upsertDetail(requestId: string, type: RequestType, body: RequestBody) {
     );
   }
 }
+
+// ---------- historical import ----------
+
+function isValidIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = parseISODate(s);
+  return (
+    d.getFullYear() === Number(s.slice(0, 4)) &&
+    d.getMonth() === Number(s.slice(5, 7)) - 1 &&
+    d.getDate() === Number(s.slice(8, 10))
+  );
+}
+
+function isValidTime(s: string): boolean {
+  if (!/^\d{2}:\d{2}$/.test(s)) return false;
+  const [h, m] = s.split(":").map(Number);
+  return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+}
+
+function parseImportBool(s: string | undefined): boolean {
+  return ["yes", "true", "1"].includes((s ?? "").trim().toLowerCase());
+}
+
+interface ImportRowResult {
+  row: number; // 1-based, matching the spreadsheet's row number for error messages
+  error?: string;
+  employeeId?: string;
+  reportToEmployeeId?: string | null;
+  body?: RequestBody;
+}
+
+// Mirrors validateForSubmit's rules for each type, but works off raw
+// spreadsheet strings instead of the live form's already-typed RequestBody,
+// and deliberately skips the AL balance check — historical data is being
+// loaded as fact, not re-validated against today's entitlement.
+function validateImportRow(type: RequestType, raw: Record<string, string>, rowNumber: number): ImportRowResult {
+  const email = (raw["Work Email"] ?? "").trim().toLowerCase();
+  if (!email) return { row: rowNumber, error: "Work Email is required." };
+  const employee = db
+    .prepare("SELECT id, report_to_employee_id FROM employees WHERE LOWER(work_email) = ?")
+    .get(email) as { id: string; report_to_employee_id: string | null } | undefined;
+  if (!employee) return { row: rowNumber, error: `No employee found with Work Email "${email}".` };
+
+  if (type === "AL") {
+    const leaveType = (raw["Leave Type"] ?? "").trim();
+    const startDate = (raw["Start Date"] ?? "").trim();
+    const returnDate = (raw["Return to Work Date"] ?? "").trim();
+    const duration = (raw["Duration"] ?? "").trim();
+    if (!LEAVE_TYPES.includes(leaveType)) {
+      return { row: rowNumber, error: `Leave Type must be one of: ${LEAVE_TYPES.join(", ")}.` };
+    }
+    if (!isValidIsoDate(startDate)) return { row: rowNumber, error: "Start Date must be a valid date (YYYY-MM-DD)." };
+    if (!isValidIsoDate(returnDate)) {
+      return { row: rowNumber, error: "Return to Work Date must be a valid date (YYYY-MM-DD)." };
+    }
+    if (!LEAVE_DURATIONS.includes(duration)) {
+      return { row: rowNumber, error: `Duration must be one of: ${LEAVE_DURATIONS.join(", ")}.` };
+    }
+    if (duration !== "Full Day" && startDate !== returnDate) {
+      return {
+        row: rowNumber,
+        error: "A half-day (Morning/Afternoon) request must have the same Start Date and Return to Work Date.",
+      };
+    }
+    if (calcAlDays(startDate, returnDate, duration) <= 0) {
+      return { row: rowNumber, error: "This request doesn't cover any working days — check the dates." };
+    }
+    const body: RequestBody = {
+      type: "AL",
+      leave_type: leaveType,
+      reason: (raw["Reason"] ?? "").trim() || undefined,
+      start_date: startDate,
+      return_to_work_date: returnDate,
+      duration,
+    };
+    return { row: rowNumber, employeeId: employee.id, reportToEmployeeId: employee.report_to_employee_id, body };
+  }
+
+  if (type === "OT") {
+    const otDate = (raw["OT Date"] ?? "").trim();
+    const startTime = (raw["Start Time"] ?? "").trim();
+    const endTime = (raw["End Time"] ?? "").trim();
+    const breakMinutesRaw = (raw["Break Minutes"] ?? "").trim();
+    const location = (raw["Location"] ?? "").trim() || "Office";
+    if (!isValidIsoDate(otDate)) return { row: rowNumber, error: "OT Date must be a valid date (YYYY-MM-DD)." };
+    if (!isValidTime(startTime)) return { row: rowNumber, error: "Start Time must be in HH:MM (24-hour) format." };
+    if (!isValidTime(endTime)) return { row: rowNumber, error: "End Time must be in HH:MM (24-hour) format." };
+    const breakMinutes = breakMinutesRaw ? Number(breakMinutesRaw) : 0;
+    if (!Number.isFinite(breakMinutes) || breakMinutes < 0) {
+      return { row: rowNumber, error: "Break Minutes must be a non-negative number." };
+    }
+    if (!OT_LOCATIONS.includes(location)) {
+      return { row: rowNumber, error: `Location must be one of: ${OT_LOCATIONS.join(", ")}.` };
+    }
+    if (calcOtHours(startTime, endTime, breakMinutes) <= 0) {
+      return { row: rowNumber, error: "This request doesn't add up to any overtime hours — check the times and break." };
+    }
+    const body: RequestBody = {
+      type: "OT",
+      ot_date: otDate,
+      start_time: startTime,
+      end_time: endTime,
+      break_minutes: breakMinutes,
+      reason: (raw["Reason"] ?? "").trim() || "Historical import",
+      project_department: (raw["Project/Department"] ?? "").trim() || undefined,
+      location,
+    };
+    return { row: rowNumber, employeeId: employee.id, reportToEmployeeId: employee.report_to_employee_id, body };
+  }
+
+  // BT
+  const destination = (raw["Destination"] ?? "").trim();
+  const purpose = (raw["Purpose"] ?? "").trim();
+  const departureDate = (raw["Departure Date"] ?? "").trim();
+  const returnDateRaw = (raw["Return Date"] ?? "").trim();
+  if (!destination) return { row: rowNumber, error: "Destination is required." };
+  if (!purpose) return { row: rowNumber, error: "Purpose is required." };
+  if (!isValidIsoDate(departureDate)) {
+    return { row: rowNumber, error: "Departure Date must be a valid date (YYYY-MM-DD)." };
+  }
+  if (!isValidIsoDate(returnDateRaw)) return { row: rowNumber, error: "Return Date must be a valid date (YYYY-MM-DD)." };
+  // Historical data rarely records exact times — a fixed 09:00/18:00 is
+  // just enough time-of-day to keep departure_at/return_at's stored shape
+  // consistent with a live BT submission; calcBtDays only reads the date
+  // part of each anyway.
+  const departureAt = `${departureDate}T09:00`;
+  const returnAt = `${returnDateRaw}T18:00`;
+  if (new Date(returnAt) <= new Date(departureAt)) {
+    return { row: rowNumber, error: "Return Date must be on or after Departure Date." };
+  }
+  const advancePaymentRequired = parseImportBool(raw["Advance Payment Required"]);
+  const advanceAmountRaw = (raw["Advance Amount"] ?? "").trim();
+  const advanceCurrency = (raw["Advance Currency"] ?? "").trim() || undefined;
+  const advanceAmount = advanceAmountRaw ? Number(advanceAmountRaw) : undefined;
+  if (advancePaymentRequired && (advanceAmount == null || !Number.isFinite(advanceAmount) || !advanceCurrency)) {
+    return {
+      row: rowNumber,
+      error: "Advance Amount and Advance Currency are required when Advance Payment Required is Yes.",
+    };
+  }
+  const body: RequestBody = {
+    type: "BT",
+    destination,
+    purpose,
+    departure_at: departureAt,
+    return_at: returnAt,
+    project_client: (raw["Project/Client"] ?? "").trim() || undefined,
+    transportation_required: parseImportBool(raw["Transportation Required"]),
+    hotel_required: parseImportBool(raw["Hotel Required"]),
+    advance_payment_required: advancePaymentRequired,
+    advance_amount: advanceAmount,
+    advance_currency: advanceCurrency,
+    advance_notes: (raw["Advance Notes"] ?? "").trim() || undefined,
+    additional_notes: (raw["Additional Notes"] ?? "").trim() || undefined,
+  };
+  return { row: rowNumber, employeeId: employee.id, reportToEmployeeId: employee.report_to_employee_id, body };
+}
+
+// All-or-nothing, same as the Employee Master CSV import: every row is
+// validated up front, and if any row fails nothing is written at all,
+// rather than leaving a partially-imported batch to sort out by hand.
+// Imported requests land straight in 'approved' status — see the plan's
+// ADR — with no approver assigned (the employee's own manager, if any, is
+// recorded anyway, but nobody actually decided this one; it's a fact being
+// loaded, not a request moving through the workflow).
+requestsRouter.post("/import", requireCap("request.import"), (req, res) => {
+  const { type, rows } = req.body as { type?: RequestType; rows?: Record<string, string>[] };
+  if (!type || !REQUEST_TYPES.includes(type)) {
+    res.status(400).json({ error: "type must be one of AL, OT, BT." });
+    return;
+  }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    res.status(400).json({ error: "No rows to import." });
+    return;
+  }
+  const results = rows.map((raw, i) => validateImportRow(type, raw, i + 1));
+  const rowErrors = results.filter((r) => r.error).map((r) => ({ row: r.row, error: r.error! }));
+  if (rowErrors.length > 0) {
+    res.status(400).json({ error: "Some rows couldn't be imported — nothing was saved.", rowErrors });
+    return;
+  }
+  const importedIds: string[] = [];
+  const commit = transaction(() => {
+    for (const r of results) {
+      const id = newId();
+      const code = generateRequestCode(type);
+      db.prepare(
+        `INSERT INTO requests (id, request_code, type, employee_id, approver_id, status, submitted_at, decided_by, decided_at, created_by)
+         VALUES (?, ?, ?, ?, ?, 'approved', datetime('now'), ?, datetime('now'), ?)`,
+      ).run(id, code, type, r.employeeId!, r.reportToEmployeeId ?? null, req.user!.id, req.user!.id);
+      upsertDetail(id, type, r.body!);
+      logAudit("request", id, "imported", req.user!.id);
+      importedIds.push(id);
+    }
+  });
+  commit();
+  res.status(201).json({ imported: importedIds.length });
+});
 
 requestsRouter.post("/", (req, res) => {
   const me = myEmployeeRow(req.user!);
@@ -594,6 +804,107 @@ requestsRouter.get("/dashboard", (req, res) => {
     .sort((a, b) => b.total_hours - a.total_hours);
 
   res.json({ leave, bt, ot });
+});
+
+// "Manage AL, OT & BT" — the oversight page for Head of Department/BOD/
+// Admin. Scoped exactly like Employee Master (employeeScopeFor): a Head of
+// Department sees their full reporting chain, Admin/BOD see everyone. Two
+// things at once, since the page needs both on load: a per-employee
+// summary (AL days used/remaining, OT hours, BT trips/days — always
+// counting only 'approved'/'cancellation_requested', same as alDaysUsed's
+// "actually committed" semantics) for the given calendar year, and the
+// full request list (every status, so pending/rejected/draft history is
+// visible too, not just what's already decided) for the drill-down table.
+requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
+  const year = String(req.query.year ?? new Date().getFullYear());
+  if (!/^\d{4}$/.test(year)) {
+    res.status(400).json({ error: "year must be a 4-digit year." });
+    return;
+  }
+  const me = myEmployeeRow(req.user!);
+  const admin = isAdminOversight(req.user!);
+  const scope = employeeScopeFor(req.user!);
+  const inScope = (employeeId: string) => scope.ids === null || scope.ids.has(employeeId);
+
+  const employees = (
+    scope.ids === null
+      ? db
+          .prepare(
+            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, annual_leave_entitlement_days
+             FROM employees WHERE is_archived = 0`,
+          )
+          .all()
+      : db
+          .prepare(
+            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, annual_leave_entitlement_days
+             FROM employees WHERE is_archived = 0 AND id IN (${[...scope.ids].map(() => "?").join(",") || "NULL"})`,
+          )
+          .all(...scope.ids)
+  ) as {
+    id: string;
+    employee_code: string | null;
+    last_name: string;
+    middle_name: string | null;
+    first_name: string;
+    english_name: string | null;
+    annual_leave_entitlement_days: number;
+  }[];
+
+  const alRows = db
+    .prepare(
+      `SELECT r.employee_id, d.days_requested FROM requests r JOIN al_details d ON d.request_id = r.id
+       WHERE r.status IN ${DASHBOARD_STATUSES} AND d.leave_type = 'Annual Leave' AND substr(d.start_date, 1, 4) = ?`,
+    )
+    .all(year) as { employee_id: string; days_requested: number }[];
+  const otRows = db
+    .prepare(
+      `SELECT r.employee_id, d.total_hours FROM requests r JOIN ot_details d ON d.request_id = r.id
+       WHERE r.status IN ${DASHBOARD_STATUSES} AND substr(d.ot_date, 1, 4) = ?`,
+    )
+    .all(year) as { employee_id: string; total_hours: number }[];
+  const btRows = db
+    .prepare(
+      `SELECT r.employee_id, d.days_requested FROM requests r JOIN bt_details d ON d.request_id = r.id
+       WHERE r.status IN ${DASHBOARD_STATUSES} AND substr(d.departure_at, 1, 4) = ?`,
+    )
+    .all(year) as { employee_id: string; days_requested: number }[];
+
+  const alTotals = new Map<string, number>();
+  for (const r of alRows) alTotals.set(r.employee_id, (alTotals.get(r.employee_id) ?? 0) + r.days_requested);
+  const otTotals = new Map<string, number>();
+  for (const r of otRows) otTotals.set(r.employee_id, (otTotals.get(r.employee_id) ?? 0) + r.total_hours);
+  const btDaysTotals = new Map<string, number>();
+  const btTripCounts = new Map<string, number>();
+  for (const r of btRows) {
+    btDaysTotals.set(r.employee_id, (btDaysTotals.get(r.employee_id) ?? 0) + r.days_requested);
+    btTripCounts.set(r.employee_id, (btTripCounts.get(r.employee_id) ?? 0) + 1);
+  }
+
+  const summary = employees.map((e) => ({
+    employee_id: e.id,
+    employee: {
+      id: e.id,
+      employee_code: e.employee_code,
+      last_name: e.last_name,
+      middle_name: e.middle_name,
+      first_name: e.first_name,
+      english_name: e.english_name,
+    },
+    al_used: alTotals.get(e.id) ?? 0,
+    al_entitlement: e.annual_leave_entitlement_days,
+    ot_hours: otTotals.get(e.id) ?? 0,
+    bt_trips: btTripCounts.get(e.id) ?? 0,
+    bt_days: btDaysTotals.get(e.id) ?? 0,
+  }));
+
+  const requestIds = (db.prepare("SELECT id, employee_id FROM requests").all() as { id: string; employee_id: string }[])
+    .filter((r) => inScope(r.employee_id));
+  const requests = requestIds
+    .map((r) => loadDetail(r.id, me?.id, admin)!)
+    .filter((d) => requestDate(d).slice(0, 4) === year)
+    .sort((a, b) => (b.created_at as string).localeCompare(a.created_at as string));
+
+  res.json({ year, summary, requests });
 });
 
 requestsRouter.get("/approvals", (req, res) => {

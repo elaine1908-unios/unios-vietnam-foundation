@@ -1,4 +1,9 @@
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  // The parsed error response body, when there was one — most callers only
+  // need `message`, but a few (e.g. bulk import) need extra fields like
+  // per-row errors that don't fit a single string.
+  data?: unknown;
+}
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -9,13 +14,16 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let data: unknown;
     try {
-      const data = await res.json();
-      if (data?.error) message = data.error;
+      data = await res.json();
+      if ((data as { error?: string })?.error) message = (data as { error: string }).error;
     } catch {
       // response had no JSON body
     }
-    throw new ApiError(message);
+    const err = new ApiError(message);
+    err.data = data;
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
