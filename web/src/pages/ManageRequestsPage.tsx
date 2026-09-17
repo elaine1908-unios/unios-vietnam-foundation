@@ -11,36 +11,66 @@ import { useAuth } from "../auth/AuthProvider";
 const TYPES: RequestType[] = ["AL", "OT", "BT"];
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => String(CURRENT_YEAR - i));
+const MONTH_OPTIONS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+].map((label, i) => ({ value: String(i + 1), label }));
 
 export function ManageRequestsPage() {
   const { user } = useAuth();
   const canImport = user?.capabilities.includes("request.import") ?? false;
 
   const [year, setYear] = useState(String(CURRENT_YEAR));
+  const [month, setMonth] = useState(""); // "" = whole year
+  const [departmentFilter, setDepartmentFilter] = useState("");
   const [employeeFilter, setEmployeeFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<RequestType | "">("");
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["requests", "manage", year],
-    queryFn: () => api.get<RequestManageResponse>(`/requests/manage?year=${year}`),
+    queryKey: ["requests", "manage", year, month],
+    queryFn: () => api.get<RequestManageResponse>(`/requests/manage?year=${year}${month ? `&month=${month}` : ""}`),
   });
 
-  const summaryRows = useMemo(
-    () =>
-      [...(data?.summary ?? [])].sort((a, b) =>
-        employeeDisplayName(a.employee).localeCompare(employeeDisplayName(b.employee)),
-      ),
-    [data],
-  );
+  const departmentOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of data?.summary ?? []) if (s.department) set.add(s.department);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  // Department isn't on a request row itself — looked up via the same
+  // employee_id every summary row and request row already carries, so
+  // both tables below filter off the one per-employee department map.
+  const departmentByEmployee = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const s of data?.summary ?? []) map.set(s.employee_id, s.department);
+    return map;
+  }, [data]);
+
+  const summaryRows = useMemo(() => {
+    let rows = data?.summary ?? [];
+    if (departmentFilter) rows = rows.filter((s) => s.department === departmentFilter);
+    return [...rows].sort((a, b) => employeeDisplayName(a.employee).localeCompare(employeeDisplayName(b.employee)));
+  }, [data, departmentFilter]);
 
   const requestRows = useMemo(() => {
     let rows = data?.requests ?? [];
+    if (departmentFilter) rows = rows.filter((r) => departmentByEmployee.get(r.employee_id) === departmentFilter);
     if (employeeFilter) rows = rows.filter((r) => r.employee_id === employeeFilter);
     if (typeFilter) rows = rows.filter((r) => r.type === typeFilter);
     if (statusFilter) rows = rows.filter((r) => r.status === statusFilter);
     return rows;
-  }, [data, employeeFilter, typeFilter, statusFilter]);
+  }, [data, departmentFilter, departmentByEmployee, employeeFilter, typeFilter, statusFilter]);
 
   const selectedEmployee = summaryRows.find((s) => s.employee_id === employeeFilter)?.employee;
 
@@ -65,25 +95,69 @@ export function ManageRequestsPage() {
         {summaryRows.length === 1 ? "the 1 person" : `the ${summaryRows.length} people`} you can see.
       </p>
 
-      <div className="flex items-center gap-2 mb-4">
-        <label className="text-sm text-ink-muted" htmlFor="manage-year">
-          Year
-        </label>
-        <select
-          id="manage-year"
-          className="input !w-auto"
-          value={year}
-          onChange={(e) => {
-            setYear(e.target.value);
-            setEmployeeFilter(null);
-          }}
-        >
-          {YEAR_OPTIONS.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
+      <div className="flex items-center gap-4 mb-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-ink-muted" htmlFor="manage-year">
+            Year
+          </label>
+          <select
+            id="manage-year"
+            className="input !w-auto"
+            value={year}
+            onChange={(e) => {
+              setYear(e.target.value);
+              setEmployeeFilter(null);
+            }}
+          >
+            {YEAR_OPTIONS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-ink-muted" htmlFor="manage-month">
+            Month
+          </label>
+          <select
+            id="manage-month"
+            className="input !w-auto"
+            value={month}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setEmployeeFilter(null);
+            }}
+          >
+            <option value="">All months</option>
+            {MONTH_OPTIONS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-ink-muted" htmlFor="manage-department">
+            Department
+          </label>
+          <select
+            id="manage-department"
+            className="input !w-auto"
+            value={departmentFilter}
+            onChange={(e) => {
+              setDepartmentFilter(e.target.value);
+              setEmployeeFilter(null);
+            }}
+          >
+            <option value="">All departments</option>
+            {departmentOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {summaryRows.length === 0 ? (
@@ -97,7 +171,7 @@ export function ManageRequestsPage() {
                   <th className="px-3 py-2 font-medium">Employee</th>
                   <th className="px-3 py-2 font-medium">AL Used / Entitlement</th>
                   <th className="px-3 py-2 font-medium">OT Hours</th>
-                  <th className="px-3 py-2 font-medium">BT Trips (Days)</th>
+                  <th className="px-3 py-2 font-medium">Business Travel</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,9 +187,9 @@ export function ManageRequestsPage() {
                     <td className="px-3 py-2 text-ink-muted">
                       {s.al_used} / {s.al_entitlement}
                     </td>
-                    <td className="px-3 py-2 text-ink-muted">{s.ot_hours}</td>
+                    <td className="px-3 py-2 text-ink-muted">{s.ot_hours.toFixed(1)}</td>
                     <td className="px-3 py-2 text-ink-muted">
-                      {s.bt_trips} ({s.bt_days})
+                      {s.bt_trips} trip{s.bt_trips === 1 ? "" : "s"} · {s.bt_days} day{s.bt_days === 1 ? "" : "s"}
                     </td>
                   </tr>
                 ))}

@@ -29,6 +29,18 @@ export function AppLayout() {
     pathname.startsWith("/employees") &&
     !pathname.startsWith("/employees/dashboard") &&
     !pathname.startsWith("/employees/org-chart");
+  // Same reasoning as Employee Master above — /requests/manage and
+  // /requests/import are their own top-level nav items under the same
+  // "/requests" prefix, so a plain prefix-matching NavLink would light up
+  // both "Submit" and "Manage" at once while on the Manage page.
+  const submitRequestsActive =
+    pathname.startsWith("/requests") &&
+    !pathname.startsWith("/requests/manage") &&
+    !pathname.startsWith("/requests/import");
+  // Import is Admin/BOD-only and only reached from a link on the Manage
+  // page (no sidebar item of its own), so it counts as part of "Manage"
+  // being active rather than falling back to "Submit" via prefix match.
+  const manageRequestsActive = pathname.startsWith("/requests/manage") || pathname.startsWith("/requests/import");
 
   return (
     <div className="min-h-screen flex">
@@ -40,13 +52,13 @@ export function AppLayout() {
         <nav className="mt-8 flex flex-col gap-1">
           {/* Visible to every signed-in user, same reasoning as My Profile —
               self-service AL/OT/BT submission isn't gated by capability. */}
-          <NavLink to="/requests" className={navLinkClass}>
+          <Link to="/requests" className={navLinkClass({ isActive: submitRequestsActive })}>
             Submit AL, OT & BT
-          </NavLink>
+          </Link>
           {canManageRequests && (
-            <NavLink to="/requests/manage" className={navLinkClass}>
+            <Link to="/requests/manage" className={navLinkClass({ isActive: manageRequestsActive })}>
               Manage AL, OT & BT
-            </NavLink>
+            </Link>
           )}
           {canViewEmployees && (
             <NavLink to="/employees/dashboard" className={navLinkClass}>

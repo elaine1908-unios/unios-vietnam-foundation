@@ -30,3 +30,14 @@ export function employeeDisplayName(e: {
   if (!e.english_name) return vietnameseName;
   return vietnameseName ? `${vietnameseName} (${e.english_name})` : e.english_name;
 }
+
+// A short label for tight spaces (calendar day cells) — English Name when
+// set, otherwise just the First Name (unaccented), rather than the full
+// [Last] [Middle] [First] (English) name employeeDisplayName builds.
+export function shortEmployeeName(e: {
+  english_name?: string | null;
+  first_name?: string | null;
+}): string {
+  if (e.english_name) return e.english_name;
+  return stripDiacritics(e.first_name ?? "");
+}

@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { EmployeeSummary, RequestsDashboard } from "../lib/types";
 import { CAREER_RANK_LABELS, CAREER_RANK_ORDER, rankBadge } from "../lib/types";
-import { employeeDisplayName } from "../lib/vietnamese";
+import { employeeDisplayName, shortEmployeeName } from "../lib/vietnamese";
 
 function Card({ label, value, colorClass = "text-ink" }: { label: string; value: number; colorClass?: string }) {
   return (
@@ -255,7 +255,7 @@ export function EmployeeDashboardPage() {
     const btByDay = new Map<number, CalendarEvent[]>();
     for (const entry of requestsDashboard?.leave ?? []) {
       if (!entry.employee) continue;
-      const label = employeeDisplayName(entry.employee);
+      const label = shortEmployeeName(entry.employee);
       for (const day of daysOfMonthInRange(entry.start_date, entry.end_date, year, month)) {
         const list = leaveByDay.get(day) ?? [];
         list.push({ key: `${entry.employee_id}-${day}`, label, detail: entry.leave_type });
@@ -264,7 +264,7 @@ export function EmployeeDashboardPage() {
     }
     for (const entry of requestsDashboard?.bt ?? []) {
       if (!entry.employee) continue;
-      const label = employeeDisplayName(entry.employee);
+      const label = shortEmployeeName(entry.employee);
       for (const day of daysOfMonthInRange(entry.start_date, entry.end_date, year, month)) {
         const list = btByDay.get(day) ?? [];
         list.push({ key: `${entry.employee_id}-${day}`, label, detail: entry.destination });

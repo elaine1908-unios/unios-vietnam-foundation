@@ -503,6 +503,7 @@ export interface RequestRecord {
 export interface RequestManageSummaryEntry {
   employee_id: string;
   employee: RequestEmployeeRef;
+  department: string | null;
   al_used: number;
   al_entitlement: number;
   ot_hours: number;
@@ -512,6 +513,7 @@ export interface RequestManageSummaryEntry {
 
 export interface RequestManageResponse {
   year: string;
+  month: string | null;
   summary: RequestManageSummaryEntry[];
   requests: RequestRecord[];
 }

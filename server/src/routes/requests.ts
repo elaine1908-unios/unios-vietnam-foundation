@@ -844,6 +844,20 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     res.status(400).json({ error: "year must be a 4-digit year." });
     return;
   }
+  // month is optional — omit it for the whole year, or pass 1-12 to narrow
+  // to one calendar month within that year.
+  const monthParam = req.query.month != null && req.query.month !== "" ? String(req.query.month) : null;
+  if (monthParam !== null && !/^([1-9]|1[0-2])$/.test(monthParam)) {
+    res.status(400).json({ error: "month must be between 1 and 12." });
+    return;
+  }
+  const yearMonth = monthParam ? `${year}-${monthParam.padStart(2, "0")}` : null;
+  // Matches either the whole year (substr to 4 chars) or one specific
+  // year-month (substr to 7 chars, "YYYY-MM") depending on whether a month
+  // was given — same prefix compared against a date column either way.
+  const datePrefix = yearMonth ?? year;
+  const prefixLength = datePrefix.length;
+
   const me = myEmployeeRow(req.user!);
   const admin = isAdminOversight(req.user!);
   const scope = employeeScopeFor(req.user!);
@@ -853,13 +867,13 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     scope.ids === null
       ? db
           .prepare(
-            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, annual_leave_entitlement_days
+            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, annual_leave_entitlement_days
              FROM employees WHERE is_archived = 0`,
           )
           .all()
       : db
           .prepare(
-            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, annual_leave_entitlement_days
+            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, annual_leave_entitlement_days
              FROM employees WHERE is_archived = 0 AND id IN (${[...scope.ids].map(() => "?").join(",") || "NULL"})`,
           )
           .all(...scope.ids)
@@ -870,27 +884,28 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     middle_name: string | null;
     first_name: string;
     english_name: string | null;
+    department: string | null;
     annual_leave_entitlement_days: number;
   }[];
 
   const alRows = db
     .prepare(
       `SELECT r.employee_id, d.days_requested FROM requests r JOIN al_details d ON d.request_id = r.id
-       WHERE r.status IN ${DASHBOARD_STATUSES} AND d.leave_type = 'Annual Leave' AND substr(d.start_date, 1, 4) = ?`,
+       WHERE r.status IN ${DASHBOARD_STATUSES} AND d.leave_type = 'Annual Leave' AND substr(d.start_date, 1, ?) = ?`,
     )
-    .all(year) as { employee_id: string; days_requested: number }[];
+    .all(prefixLength, datePrefix) as { employee_id: string; days_requested: number }[];
   const otRows = db
     .prepare(
       `SELECT r.employee_id, d.total_hours FROM requests r JOIN ot_details d ON d.request_id = r.id
-       WHERE r.status IN ${DASHBOARD_STATUSES} AND substr(d.ot_date, 1, 4) = ?`,
+       WHERE r.status IN ${DASHBOARD_STATUSES} AND substr(d.ot_date, 1, ?) = ?`,
     )
-    .all(year) as { employee_id: string; total_hours: number }[];
+    .all(prefixLength, datePrefix) as { employee_id: string; total_hours: number }[];
   const btRows = db
     .prepare(
       `SELECT r.employee_id, d.days_requested FROM requests r JOIN bt_details d ON d.request_id = r.id
-       WHERE r.status IN ${DASHBOARD_STATUSES} AND substr(d.departure_at, 1, 4) = ?`,
+       WHERE r.status IN ${DASHBOARD_STATUSES} AND substr(d.departure_at, 1, ?) = ?`,
     )
-    .all(year) as { employee_id: string; days_requested: number }[];
+    .all(prefixLength, datePrefix) as { employee_id: string; days_requested: number }[];
 
   const alTotals = new Map<string, number>();
   for (const r of alRows) alTotals.set(r.employee_id, (alTotals.get(r.employee_id) ?? 0) + r.days_requested);
@@ -913,9 +928,13 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
       first_name: e.first_name,
       english_name: e.english_name,
     },
+    department: e.department,
     al_used: alTotals.get(e.id) ?? 0,
     al_entitlement: e.annual_leave_entitlement_days,
-    ot_hours: otTotals.get(e.id) ?? 0,
+    // Rounded to 1 decimal for display — total_hours is already rounded
+    // to 2 decimals per OT entry (calcOtHours), but summing several can
+    // still land on an ugly float (e.g. floating-point 7.550000000000001).
+    ot_hours: Math.round((otTotals.get(e.id) ?? 0) * 10) / 10,
     bt_trips: btTripCounts.get(e.id) ?? 0,
     bt_days: btDaysTotals.get(e.id) ?? 0,
   }));
@@ -924,10 +943,10 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     .filter((r) => inScope(r.employee_id));
   const requests = requestIds
     .map((r) => loadDetail(r.id, me?.id, admin)!)
-    .filter((d) => requestDate(d).slice(0, 4) === year)
+    .filter((d) => requestDate(d).slice(0, prefixLength) === datePrefix)
     .sort((a, b) => (b.created_at as string).localeCompare(a.created_at as string));
 
-  res.json({ year, summary, requests });
+  res.json({ year, month: monthParam, summary, requests });
 });
 
 requestsRouter.get("/approvals", (req, res) => {
