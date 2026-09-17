@@ -939,11 +939,46 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     bt_days: btDaysTotals.get(e.id) ?? 0,
   }));
 
-  const requestIds = (db.prepare("SELECT id, employee_id FROM requests").all() as { id: string; employee_id: string }[])
-    .filter((r) => inScope(r.employee_id));
-  const requests = requestIds
-    .map((r) => loadDetail(r.id, me?.id, admin)!)
-    .filter((d) => requestDate(d).slice(0, prefixLength) === datePrefix)
+  // Find which requests actually fall in the selected year/month via each
+  // type's own detail table (same date columns as the totals above) BEFORE
+  // hydrating anything — loadDetail() runs its own extra query per row (the
+  // audit-history join), so calling it for every request the company has
+  // ever created and only then discarding what's outside the date window
+  // (the previous approach) doesn't scale once historical data piles up:
+  // it turns one page load into thousands of synchronous SQLite round
+  // trips, blocking the whole server long enough to look like a crash.
+  const matchingRequestIds = new Set<string>();
+  for (const row of db
+    .prepare(`SELECT r.id FROM requests r JOIN al_details d ON d.request_id = r.id WHERE substr(d.start_date, 1, ?) = ?`)
+    .all(prefixLength, datePrefix) as { id: string }[]) {
+    matchingRequestIds.add(row.id);
+  }
+  for (const row of db
+    .prepare(`SELECT r.id FROM requests r JOIN ot_details d ON d.request_id = r.id WHERE substr(d.ot_date, 1, ?) = ?`)
+    .all(prefixLength, datePrefix) as { id: string }[]) {
+    matchingRequestIds.add(row.id);
+  }
+  for (const row of db
+    .prepare(
+      `SELECT r.id FROM requests r JOIN bt_details d ON d.request_id = r.id WHERE substr(d.departure_at, 1, ?) = ?`,
+    )
+    .all(prefixLength, datePrefix) as { id: string }[]) {
+    matchingRequestIds.add(row.id);
+  }
+
+  const employeeIdByRequestId = new Map(
+    (
+      db
+        .prepare(
+          `SELECT id, employee_id FROM requests WHERE id IN (${[...matchingRequestIds].map(() => "?").join(",") || "NULL"})`,
+        )
+        .all(...matchingRequestIds) as { id: string; employee_id: string }[]
+    ).map((r) => [r.id, r.employee_id]),
+  );
+
+  const requests = [...matchingRequestIds]
+    .filter((id) => inScope(employeeIdByRequestId.get(id)!))
+    .map((id) => loadDetail(id, me?.id, admin)!)
     .sort((a, b) => (b.created_at as string).localeCompare(a.created_at as string));
 
   res.json({ year, month: monthParam, summary, requests });
