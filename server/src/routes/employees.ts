@@ -116,7 +116,7 @@ function matchesSearch(fields: (string | null | undefined)[], search: string): b
   return fields.some((f) => f && stripDiacritics(f).toLowerCase().includes(needle));
 }
 
-interface EmployeeScope {
+export interface EmployeeScope {
   // null = unrestricted (Owner/Admin). Otherwise the exact set of employee
   // ids this viewer may see at all — everyone in their reporting chain,
   // recursively (their reports, their reports' reports, and so on), not
@@ -125,7 +125,7 @@ interface EmployeeScope {
   redacted: boolean;
 }
 
-function employeeScopeFor(user: PublicUser): EmployeeScope {
+export function employeeScopeFor(user: PublicUser): EmployeeScope {
   if (user.access_level === "owner" || user.access_level === "admin") return { ids: null, redacted: false };
   const me = db.prepare("SELECT id FROM employees WHERE LOWER(work_email) = ?").get(user.email.toLowerCase()) as
     | { id: string }

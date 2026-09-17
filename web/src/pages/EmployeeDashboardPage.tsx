@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import type { EmployeeSummary } from "../lib/types";
+import type { EmployeeSummary, RequestsDashboard } from "../lib/types";
 import { CAREER_RANK_LABELS, CAREER_RANK_ORDER, rankBadge } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
 
@@ -93,6 +93,117 @@ function MilestoneCard({
   );
 }
 
+const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+interface CalendarEvent {
+  key: string;
+  label: string;
+  detail: string;
+}
+
+// Clips a [startStr, endStr] range (plain "YYYY-MM-DD" strings) down to the
+// days it actually spends inside the given calendar month — a leave/trip
+// that starts last month or ends next month still only contributes the
+// day cells that belong to this grid.
+function daysOfMonthInRange(startStr: string, endStr: string, year: number, month: number): number[] {
+  const start = parseLocalDate(startStr);
+  const end = parseLocalDate(endStr);
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0);
+  const rangeStart = start < monthStart ? monthStart : start;
+  const rangeEnd = end > monthEnd ? monthEnd : end;
+  const days: number[] = [];
+  const cur = new Date(rangeStart);
+  while (cur <= rangeEnd) {
+    days.push(cur.getDate());
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+
+function MonthCalendar({
+  year,
+  month,
+  eventsByDay,
+  chipClass,
+}: {
+  year: number;
+  month: number;
+  eventsByDay: Map<number, CalendarEvent[]>;
+  chipClass: string;
+}) {
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+  const cells: (number | null)[] = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: totalDays }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="grid grid-cols-7 gap-1 min-w-[560px] text-xs">
+        {WEEKDAY_LABELS.map((d) => (
+          <div key={d} className="text-center text-ink-faint font-medium pb-1">
+            {d}
+          </div>
+        ))}
+        {cells.map((day, i) => {
+          const events = day ? (eventsByDay.get(day) ?? []) : [];
+          const isToday = isCurrentMonth && day === today.getDate();
+          return (
+            <div
+              key={i}
+              className={`min-h-[68px] rounded border p-1 ${day ? "border-border" : "border-transparent"} ${isToday ? "bg-accent-soft" : ""}`}
+            >
+              {day && <div className="text-ink-faint mb-0.5">{day}</div>}
+              <div className="flex flex-col gap-0.5">
+                {events.slice(0, 3).map((ev) => (
+                  <div key={ev.key} className={`truncate rounded px-1 py-0.5 ${chipClass}`} title={`${ev.label} — ${ev.detail}`}>
+                    {ev.label}
+                  </div>
+                ))}
+                {events.length > 3 && <div className="text-ink-faint">+{events.length - 3} more</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CalendarCard({
+  title,
+  emptyText,
+  year,
+  month,
+  eventsByDay,
+  chipClass,
+  hasAnyEvents,
+}: {
+  title: string;
+  emptyText: string;
+  year: number;
+  month: number;
+  eventsByDay: Map<number, CalendarEvent[]>;
+  chipClass: string;
+  hasAnyEvents: boolean;
+}) {
+  return (
+    <div className="card !p-4">
+      <h2 className="font-display font-semibold mb-3">{title}</h2>
+      {hasAnyEvents ? (
+        <MonthCalendar year={year} month={month} eventsByDay={eventsByDay} chipClass={chipClass} />
+      ) : (
+        <p className="text-sm text-ink-muted">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
 function countBy(employees: EmployeeSummary[], pick: (e: EmployeeSummary) => string | null): [string, number][] {
   const counts = new Map<string, number>();
   for (const e of employees) {
@@ -129,6 +240,42 @@ export function EmployeeDashboardPage() {
     queryKey: ["employees", "", true],
     queryFn: () => api.get<EmployeeSummary[]>("/employees?includeArchived=true"),
   });
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const monthParam = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const { data: requestsDashboard } = useQuery({
+    queryKey: ["requests", "dashboard", monthParam],
+    queryFn: () => api.get<RequestsDashboard>(`/requests/dashboard?month=${monthParam}`),
+  });
+
+  const calendars = useMemo(() => {
+    const leaveByDay = new Map<number, CalendarEvent[]>();
+    const btByDay = new Map<number, CalendarEvent[]>();
+    for (const entry of requestsDashboard?.leave ?? []) {
+      if (!entry.employee) continue;
+      const label = employeeDisplayName(entry.employee);
+      for (const day of daysOfMonthInRange(entry.start_date, entry.end_date, year, month)) {
+        const list = leaveByDay.get(day) ?? [];
+        list.push({ key: `${entry.employee_id}-${day}`, label, detail: entry.leave_type });
+        leaveByDay.set(day, list);
+      }
+    }
+    for (const entry of requestsDashboard?.bt ?? []) {
+      if (!entry.employee) continue;
+      const label = employeeDisplayName(entry.employee);
+      for (const day of daysOfMonthInRange(entry.start_date, entry.end_date, year, month)) {
+        const list = btByDay.get(day) ?? [];
+        list.push({ key: `${entry.employee_id}-${day}`, label, detail: entry.destination });
+        btByDay.set(day, list);
+      }
+    }
+    const otHours: [string, number][] = (requestsDashboard?.ot ?? [])
+      .filter((o) => o.employee)
+      .map((o) => [employeeDisplayName(o.employee!), o.total_hours]);
+    return { leaveByDay, btByDay, otHours };
+  }, [requestsDashboard, year, month]);
 
   const stats = useMemo(() => {
     const all = data ?? [];
@@ -284,6 +431,27 @@ export function EmployeeDashboardPage() {
         />
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <CalendarCard
+          title={`On Leave — ${monthName}`}
+          emptyText="No approved leave this month."
+          year={year}
+          month={month}
+          eventsByDay={calendars.leaveByDay}
+          chipClass="bg-accent-green/20 text-ink border-l-2 border-accent-green"
+          hasAnyEvents={calendars.leaveByDay.size > 0}
+        />
+        <CalendarCard
+          title={`Business Travel — ${monthName}`}
+          emptyText="No approved business travel this month."
+          year={year}
+          month={month}
+          eventsByDay={calendars.btByDay}
+          chipClass="bg-accent-periwinkle/20 text-ink border-l-2 border-accent-periwinkle"
+          hasAnyEvents={calendars.btByDay.size > 0}
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <BreakdownCard title="By Department" counts={stats.byDepartment} barClass="bg-accent" />
         <BreakdownCard
@@ -293,6 +461,11 @@ export function EmployeeDashboardPage() {
         />
         <BreakdownCard title="By Office Location" counts={stats.byLocation} barClass="bg-accent" />
         <BreakdownCard title="Team Size by Manager" counts={stats.byManager} barClass="bg-accent-2" />
+        <BreakdownCard
+          title={`Overtime — ${monthName} (hours)`}
+          counts={calendars.otHours}
+          barClass="bg-accent-lavender"
+        />
       </div>
     </div>
   );

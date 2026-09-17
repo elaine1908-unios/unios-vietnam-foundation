@@ -498,6 +498,34 @@ export interface RequestRecord {
   };
 }
 
+export interface DashboardLeaveEntry {
+  employee_id: string;
+  employee: RequestEmployeeRef | null;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface DashboardBtEntry {
+  employee_id: string;
+  employee: RequestEmployeeRef | null;
+  destination: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface DashboardOtEntry {
+  employee_id: string;
+  employee: RequestEmployeeRef | null;
+  total_hours: number;
+}
+
+export interface RequestsDashboard {
+  leave: DashboardLeaveEntry[];
+  bt: DashboardBtEntry[];
+  ot: DashboardOtEntry[];
+}
+
 // ---------- Code of Conduct ----------
 
 export interface CodeOfConductDocument {

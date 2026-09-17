@@ -3,6 +3,7 @@ import { db, transaction } from "../db.js";
 import { newId } from "../ids.js";
 import { requireAuth } from "../middleware.js";
 import { logAudit } from "../audit.js";
+import { employeeScopeFor } from "./employees.js";
 import type { PublicUser } from "../types.js";
 
 export const requestsRouter = Router();
@@ -507,6 +508,93 @@ function requestDate(d: Record<string, unknown>): string {
   if (d.type === "OT") return (detail.ot_date as string) ?? "";
   return ((detail.departure_at as string) ?? "").slice(0, 10);
 }
+
+// Company-wide (well, "everyone this viewer is allowed to see") view of
+// approved absences for one calendar month — powers the Employee
+// Dashboard's Leave/BT calendars and OT summary. Scoped exactly like
+// Employee Master (see employeeScopeFor): Owner/Admin see everyone, a Team
+// Lead/Head of Department sees their own reporting chain + themselves, and
+// anyone else effectively only sees themselves. `cancellation_requested` is
+// included alongside `approved` — same reasoning as alDaysUsed above: it's
+// still an active leave/BT/OT until the cancellation is actually confirmed.
+const DASHBOARD_STATUSES = "('approved', 'cancellation_requested')";
+
+requestsRouter.get("/dashboard", (req, res) => {
+  const month = String(req.query.month ?? "");
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    res.status(400).json({ error: "month must be in YYYY-MM format." });
+    return;
+  }
+  const monthStart = `${month}-01`;
+  const [y, m] = month.split("-").map(Number);
+  const monthEnd = new Date(y, m, 0).toISOString().slice(0, 10); // last day of month
+
+  const scope = employeeScopeFor(req.user!);
+  const inScope = (employeeId: string) => scope.ids === null || scope.ids.has(employeeId);
+
+  const leave = (
+    db
+      .prepare(
+        `SELECT r.employee_id, d.leave_type, d.start_date, d.return_to_work_date
+         FROM requests r JOIN al_details d ON d.request_id = r.id
+         WHERE r.status IN ${DASHBOARD_STATUSES} AND d.start_date <= ? AND d.return_to_work_date >= ?`,
+      )
+      .all(monthEnd, monthStart) as {
+      employee_id: string;
+      leave_type: string;
+      start_date: string;
+      return_to_work_date: string;
+    }[]
+  )
+    .filter((r) => inScope(r.employee_id))
+    .map((r) => ({
+      employee_id: r.employee_id,
+      employee: employeeRef(r.employee_id),
+      leave_type: r.leave_type,
+      start_date: r.start_date,
+      end_date: r.return_to_work_date,
+    }));
+
+  const bt = (
+    db
+      .prepare(
+        `SELECT r.employee_id, d.destination, d.departure_at, d.return_at
+         FROM requests r JOIN bt_details d ON d.request_id = r.id
+         WHERE r.status IN ${DASHBOARD_STATUSES} AND substr(d.departure_at, 1, 10) <= ? AND substr(d.return_at, 1, 10) >= ?`,
+      )
+      .all(monthEnd, monthStart) as {
+      employee_id: string;
+      destination: string;
+      departure_at: string;
+      return_at: string;
+    }[]
+  )
+    .filter((r) => inScope(r.employee_id))
+    .map((r) => ({
+      employee_id: r.employee_id,
+      employee: employeeRef(r.employee_id),
+      destination: r.destination,
+      start_date: r.departure_at.slice(0, 10),
+      end_date: r.return_at.slice(0, 10),
+    }));
+
+  const otRows = (
+    db
+      .prepare(
+        `SELECT r.employee_id, d.total_hours
+         FROM requests r JOIN ot_details d ON d.request_id = r.id
+         WHERE r.status IN ${DASHBOARD_STATUSES} AND d.ot_date >= ? AND d.ot_date <= ?`,
+      )
+      .all(monthStart, monthEnd) as { employee_id: string; total_hours: number }[]
+  ).filter((r) => inScope(r.employee_id));
+  const otTotals = new Map<string, number>();
+  for (const r of otRows) otTotals.set(r.employee_id, (otTotals.get(r.employee_id) ?? 0) + r.total_hours);
+  const ot = [...otTotals.entries()]
+    .map(([employee_id, total_hours]) => ({ employee_id, employee: employeeRef(employee_id), total_hours }))
+    .sort((a, b) => b.total_hours - a.total_hours);
+
+  res.json({ leave, bt, ot });
+});
 
 requestsRouter.get("/approvals", (req, res) => {
   const me = myEmployeeRow(req.user!);
