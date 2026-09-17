@@ -31,7 +31,8 @@ export type Capability =
   | "employee.edit"
   | "employee.archive"
   | "employee.export"
-  | "employee.deleteAll";
+  | "employee.deleteAll"
+  | "codeofconduct.edit";
 
 export type CareerRankKey = "core" | "specialists" | "leadership" | "divisional";
 
@@ -494,4 +495,39 @@ export interface RequestRecord {
     can_decide: boolean;
     can_decide_cancellation: boolean;
   };
+}
+
+// ---------- Code of Conduct ----------
+
+export interface CodeOfConductDocument {
+  id: string;
+  version: string;
+  version_date: string;
+  updated_at: string;
+}
+
+export interface CodeOfConductSectionSummary {
+  id: string;
+  sort_order: number;
+  title: string;
+}
+
+export interface CodeOfConductSectionDetail {
+  id: string;
+  sort_order: number;
+  title: string;
+  content: string;
+  updated_at: string;
+  updated_by: string | null;
+  updated_by_name: string | null;
+  document: CodeOfConductDocument;
+}
+
+export interface CodeOfConductVersionHistoryEntry {
+  id: string;
+  version: string;
+  version_date: string;
+  section_title: string;
+  changed_at: string;
+  changed_by_name: string | null;
 }

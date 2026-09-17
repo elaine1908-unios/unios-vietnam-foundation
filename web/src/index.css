@@ -137,3 +137,42 @@ body {
 .org-tree > li::after {
   display: none;
 }
+
+/* Code of Conduct rich text (CodeOfConductSectionPage.tsx) — shared between
+   the read-only rendered view (dangerouslySetInnerHTML) and TipTap's own
+   edit surface, so a section looks the same whichever mode it's in. No
+   @tailwindcss/typography plugin installed — this is deliberately minimal,
+   just enough for headings/paragraphs/lists to read clearly. */
+.prose-cc h4 {
+  font-family: "Mark Pro", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+}
+.prose-cc h4:first-child {
+  margin-top: 0;
+}
+.prose-cc p {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  margin: 0.75rem 0;
+}
+.prose-cc ul,
+.prose-cc ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+.prose-cc ul {
+  list-style: disc;
+}
+.prose-cc ol {
+  list-style: decimal;
+}
+.prose-cc li {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  margin: 0.25rem 0;
+}
+.prose-cc strong {
+  font-weight: 700;
+}

@@ -58,6 +58,11 @@ export function AppLayout() {
           <NavLink to="/career-map" className={navLinkClass}>
             Career Map
           </NavLink>
+          {/* Viewable by every access level, same as Career Map — only the
+              edit mode is gated (codeofconduct.edit, Admin/BOD). */}
+          <NavLink to="/code-of-conduct" className={navLinkClass}>
+            Code of Conduct
+          </NavLink>
           {canViewEmployees && (
             <Link to="/employees" className={navLinkClass({ isActive: employeeMasterActive })}>
               Employee Master

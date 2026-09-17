@@ -10,6 +10,9 @@ import { MyProfilePage } from "./pages/MyProfilePage";
 import { RequestsPage } from "./pages/RequestsPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
+import { CodeOfConductPage } from "./pages/CodeOfConductPage";
+import { CodeOfConductSectionPage } from "./pages/CodeOfConductSectionPage";
+import { CodeOfConductVersionHistoryPage } from "./pages/CodeOfConductVersionHistoryPage";
 import { ProfilesListPage } from "./pages/ProfilesListPage";
 import { ProfileDetailPage } from "./pages/ProfileDetailPage";
 import { ProfileEditPage } from "./pages/ProfileEditPage";
@@ -58,6 +61,9 @@ export function App() {
               <Route path="/requests" element={<RequestsPage />} />
               <Route path="/requests/approvals" element={<ApprovalsPage />} />
               <Route path="/requests/:id" element={<RequestDetailPage />} />
+              <Route path="/code-of-conduct" element={<CodeOfConductPage />} />
+              <Route path="/code-of-conduct/history" element={<CodeOfConductVersionHistoryPage />} />
+              <Route path="/code-of-conduct/:id" element={<CodeOfConductSectionPage />} />
               <Route
                 path="/profiles/new"
                 element={

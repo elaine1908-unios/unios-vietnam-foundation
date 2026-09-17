@@ -56,6 +56,10 @@ export const CAPABILITIES = [
   // delete zone" — see ADDED_BY_LEVEL below) can do everything else Owner
   // can without holding this one.
   "employee.deleteAll",
+  // Everyone can read the Code of Conduct (see careermap.view's team_member
+  // grant for the same "universal read" reasoning) — this is the edit
+  // capability specifically.
+  "codeofconduct.edit",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -87,7 +91,7 @@ const ADDED_BY_LEVEL: Record<AccessLevel, Capability[]> = {
   // above, cumulatively. Admin holds everything Owner does except the
   // Danger Zone (employee.deleteAll, added only at owner below) — "same as
   // Owner but no delete zone" per the access-level spec.
-  admin: ["user.admin", "employee.create", "employee.edit", "employee.archive", "employee.export"],
+  admin: ["user.admin", "employee.create", "employee.edit", "employee.archive", "employee.export", "codeofconduct.edit"],
   owner: ["employee.deleteAll"],
 };
 
