@@ -73,17 +73,21 @@ function parseHM(s: string): number {
 // Working days only (weekends excluded — there's no public-holiday calendar
 // in this app, so that's the one known gap). Morning/Afternoon is a
 // half-day and only valid for a single-day request.
-function calcAlDays(startDate: string, returnDate: string, duration: string): number {
+// `countWeekends` defaults to false (the normal "weekends aren't working
+// days" rule for a live submission) — the historical import is the one
+// caller that can override it per-row, for a company that sometimes
+// treats a Saturday as a working day.
+function calcAlDays(startDate: string, returnDate: string, duration: string, countWeekends = false): number {
   const start = parseISODate(startDate);
   const end = parseISODate(returnDate);
   if (end < start) return 0;
   if (duration !== "Full Day") {
-    return start.getTime() === end.getTime() && !isWeekend(start) ? 0.5 : 0;
+    return start.getTime() === end.getTime() && (countWeekends || !isWeekend(start)) ? 0.5 : 0;
   }
   let count = 0;
   const cur = new Date(start);
   while (cur <= end) {
-    if (!isWeekend(cur)) count++;
+    if (countWeekends || !isWeekend(cur)) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
@@ -237,6 +241,10 @@ interface RequestBody {
   start_date?: string;
   return_to_work_date?: string;
   duration?: string;
+  // Historical-import-only override — see calcAlDays. Never set by the
+  // live AL form, so it's always falsy (the normal rule) outside of
+  // POST /requests/import.
+  count_weekends?: boolean;
   // OT
   ot_date?: string;
   start_time?: string;
@@ -324,7 +332,7 @@ function upsertDetail(requestId: string, type: RequestType, body: RequestBody) {
       body.return_to_work_date ?? "",
       body.duration ?? "",
       body.start_date && body.return_to_work_date && body.duration
-        ? calcAlDays(body.start_date, body.return_to_work_date, body.duration)
+        ? calcAlDays(body.start_date, body.return_to_work_date, body.duration, body.count_weekends)
         : 0,
     );
   } else if (type === "OT") {
@@ -440,7 +448,12 @@ function validateImportRow(type: RequestType, raw: Record<string, string>, rowNu
         error: "A half-day (Morning/Afternoon) request must have the same Start Date and Return to Work Date.",
       };
     }
-    if (calcAlDays(startDate, returnDate, duration) <= 0) {
+    // Optional override for a company that sometimes works Saturdays — a
+    // row marked Yes counts every day in its range as a working day
+    // instead of skipping Sat/Sun, since historical data isn't always on
+    // a strict Mon-Fri schedule.
+    const countWeekends = parseImportBool(raw["Treat Weekend as Working Day"]);
+    if (calcAlDays(startDate, returnDate, duration, countWeekends) <= 0) {
       return { row: rowNumber, error: "This request doesn't cover any working days — check the dates." };
     }
     const body: RequestBody = {
@@ -450,6 +463,7 @@ function validateImportRow(type: RequestType, raw: Record<string, string>, rowNu
       start_date: startDate,
       return_to_work_date: returnDate,
       duration,
+      count_weekends: countWeekends,
     };
     return { row: rowNumber, employeeId: employee.id, reportToEmployeeId: employee.report_to_employee_id, body };
   }

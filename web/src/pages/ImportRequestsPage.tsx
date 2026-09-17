@@ -9,7 +9,15 @@ import { REQUEST_TYPE_LABELS } from "../lib/types";
 const TABS: RequestType[] = ["AL", "OT", "BT"];
 
 const COLUMNS: Record<RequestType, string[]> = {
-  AL: ["Work Email", "Leave Type", "Start Date", "Return to Work Date", "Duration", "Reason"],
+  AL: [
+    "Work Email",
+    "Leave Type",
+    "Start Date",
+    "Return to Work Date",
+    "Duration",
+    "Reason",
+    "Treat Weekend as Working Day",
+  ],
   OT: ["Work Email", "OT Date", "Start Time", "End Time", "Break Minutes", "Reason", "Project/Department", "Location"],
   BT: [
     "Work Email",
@@ -31,8 +39,16 @@ const COLUMNS: Record<RequestType, string[]> = {
 // Shown as a second row in the downloaded template — a worked example
 // beats a header-only file for showing the expected enum spellings
 // (Leave Type, Duration, Location) and date/time formats.
+// Only these columns actually block a row when missing/invalid — every
+// other column in COLUMNS is nice-to-have context or, for AL's "Treat
+// Weekend as Working Day", an opt-in override (see calcAlDays on the
+// server) rather than something every row needs to set.
+const OPTIONAL_COLUMNS: Partial<Record<RequestType, string[]>> = {
+  AL: ["Treat Weekend as Working Day"],
+};
+
 const EXAMPLE_ROW: Record<RequestType, string[]> = {
-  AL: ["jane.doe@unios.com", "Annual Leave", "2026-01-06", "2026-01-06", "Full Day", "New Year travel"],
+  AL: ["jane.doe@unios.com", "Annual Leave", "2026-01-06", "2026-01-06", "Full Day", "New Year travel", "No"],
   OT: ["jane.doe@unios.com", "2026-01-15", "18:00", "21:00", "0", "Release prep", "Engineering", "Office"],
   BT: [
     "jane.doe@unios.com",
@@ -178,7 +194,16 @@ export function ImportRequestsPage() {
           {fileName && <span className="text-sm text-ink-muted">{fileName}</span>}
         </div>
         <p className="text-xs text-ink-faint">
-          Required columns: {columns.join(", ")}. Work Email must match an existing employee record.
+          Required columns: {columns.filter((c) => !OPTIONAL_COLUMNS[type]?.includes(c)).join(", ")}. Work Email
+          must match an existing employee record.
+          {OPTIONAL_COLUMNS[type] && OPTIONAL_COLUMNS[type]!.length > 0 && (
+            <>
+              {" "}
+              Optional: {OPTIONAL_COLUMNS[type]!.join(", ")} (Yes/No — leave blank for No). For Annual Leave, a Yes
+              counts every day in the request's range as a working day instead of skipping Saturdays/Sundays, for a
+              day that was actually worked.
+            </>
+          )}
         </p>
       </div>
 
