@@ -65,29 +65,53 @@ function isWeekend(d: Date): boolean {
   return day === 0 || day === 6;
 }
 
+// Vietnam's fixed (solar-calendar) public holidays only — same date every
+// year, no lookup table needed. Deliberately excludes Tết, Hùng Kings' Day,
+// and National Day's government-chosen adjacent day, since those move or
+// are set year by year rather than being genuinely fixed.
+const VN_FIXED_HOLIDAYS = new Set([
+  "01-01", // New Year's Day
+  "04-30", // Reunification Day
+  "05-01", // International Labor Day
+  "09-02", // National Day
+]);
+
+function isVnFixedHoliday(d: Date): boolean {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return VN_FIXED_HOLIDAYS.has(`${mm}-${dd}`);
+}
+
+function isNonWorkingDay(d: Date): boolean {
+  return isWeekend(d) || isVnFixedHoliday(d);
+}
+
 function parseHM(s: string): number {
   const [h, m] = s.split(":").map(Number);
   return h * 60 + m;
 }
 
-// Working days only (weekends excluded — there's no public-holiday calendar
-// in this app, so that's the one known gap). Morning/Afternoon is a
-// half-day and only valid for a single-day request.
-// `countWeekends` defaults to false (the normal "weekends aren't working
-// days" rule for a live submission) — the historical import is the one
-// caller that can override it per-row, for a company that sometimes
-// treats a Saturday as a working day.
+// Return to Work Date is the day the employee is BACK at work, not the
+// last day of leave — so for a Full Day request it's an exclusive upper
+// bound: a Friday start with a Monday return is 1 working day (Friday
+// only), not 2. A half-day request has no such boundary (start ===
+// return represents the single day it applies to), so that path is
+// unaffected. `countWeekends` defaults to false (the normal "weekends and
+// Vietnam's fixed public holidays aren't working days" rule for a live
+// submission) — the historical import is the one caller that can override
+// it per-row, for a company that sometimes treats a Saturday (or a
+// holiday) as a working day.
 function calcAlDays(startDate: string, returnDate: string, duration: string, countWeekends = false): number {
   const start = parseISODate(startDate);
   const end = parseISODate(returnDate);
   if (end < start) return 0;
   if (duration !== "Full Day") {
-    return start.getTime() === end.getTime() && (countWeekends || !isWeekend(start)) ? 0.5 : 0;
+    return start.getTime() === end.getTime() && (countWeekends || !isNonWorkingDay(start)) ? 0.5 : 0;
   }
   let count = 0;
   const cur = new Date(start);
-  while (cur <= end) {
-    if (countWeekends || !isWeekend(cur)) count++;
+  while (cur < end) {
+    if (countWeekends || !isNonWorkingDay(cur)) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
@@ -296,6 +320,13 @@ function validateForSubmit(type: RequestType, body: RequestBody): string | null 
     if (body.duration !== "Full Day" && body.start_date !== body.return_to_work_date) {
       return "A half-day (Morning/Afternoon) request must have the same Start Date and Return to Work Date.";
     }
+    // Return to Work Date is the day you're back at work, so for a Full
+    // Day request it must be strictly after Start Date — even a single
+    // day off needs the next working day as the return date, not the
+    // same day (see calcAlDays).
+    if (body.duration === "Full Day" && body.return_to_work_date! <= body.start_date!) {
+      return "Return to Work Date must be after Start Date — it's the day you're back at work, not the last day of leave.";
+    }
     if (calcAlDays(body.start_date!, body.return_to_work_date!, body.duration!) <= 0) {
       return "This request doesn't cover any working days — check the dates.";
     }
@@ -446,6 +477,15 @@ function validateImportRow(type: RequestType, raw: Record<string, string>, rowNu
       return {
         row: rowNumber,
         error: "A half-day (Morning/Afternoon) request must have the same Start Date and Return to Work Date.",
+      };
+    }
+    // Same "Return to Work Date is exclusive" rule as a live submission
+    // (see calcAlDays) — a Full Day row needs the next working day as its
+    // return date, even for a single day of historical leave.
+    if (duration === "Full Day" && returnDate <= startDate) {
+      return {
+        row: rowNumber,
+        error: "Return to Work Date must be after Start Date — it's the day the employee was back at work.",
       };
     }
     // Optional override for a company that sometimes works Saturdays — a

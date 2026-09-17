@@ -13,16 +13,29 @@ function isWeekend(d: Date): boolean {
   const day = d.getDay();
   return day === 0 || day === 6;
 }
+// Vietnam's fixed (solar-calendar) public holidays only — same date every
+// year. Excludes Tết, Hùng Kings' Day, and National Day's government-chosen
+// adjacent day, since those move or are set year by year.
+const VN_FIXED_HOLIDAYS = new Set(["01-01", "04-30", "05-01", "09-02"]);
+function isNonWorkingDay(d: Date): boolean {
+  if (isWeekend(d)) return true;
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return VN_FIXED_HOLIDAYS.has(`${mm}-${dd}`);
+}
+// Return to Work Date is the day you're back at work, not the last day of
+// leave — for a Full Day request it's an exclusive upper bound (Friday
+// start, Monday return = 1 working day, not 2).
 export function calcAlDays(start: string, end: string, duration: string): number {
   if (!start || !end) return 0;
   const s = parseISODate(start);
   const e = parseISODate(end);
   if (e < s) return 0;
-  if (duration !== "Full Day") return s.getTime() === e.getTime() && !isWeekend(s) ? 0.5 : 0;
+  if (duration !== "Full Day") return s.getTime() === e.getTime() && !isNonWorkingDay(s) ? 0.5 : 0;
   let count = 0;
   const cur = new Date(s);
-  while (cur <= e) {
-    if (!isWeekend(cur)) count++;
+  while (cur < e) {
+    if (!isNonWorkingDay(cur)) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
@@ -134,6 +147,11 @@ export function ALRequestForm({ initial, ...handlers }: { initial?: Partial<AlDe
           <input className="input" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
         </Field>
       </div>
+      {duration === "Full Day" && (
+        <p className="text-xs text-ink-faint -mt-2">
+          The day you're back at work — for one day off, set this to the next working day, not the same day.
+        </p>
+      )}
       <Field label="Leave Duration *">
         <select className="input" value={duration} onChange={(e) => setDuration(e.target.value)}>
           {LEAVE_DURATIONS.map((d) => (
