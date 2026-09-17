@@ -10,6 +10,11 @@ import { employeeDisplayName } from "./vietnamese";
 // is set manually — see the same reasoning in routes/employees.ts).
 const EXPORT_COLUMNS: { header: string; get: (e: EmployeeDetail) => string }[] = [
   { header: "Employee ID", get: (e) => e.employee_code ?? "" },
+  // Computed, not stored (see employeeDisplayName) — same "reference only,
+  // not part of the import mapping" category as Rank/Function/Report To
+  // above: re-importing this export via "Update existing employees only"
+  // just ignores an unrecognized column header like this one.
+  { header: "Display Name", get: (e) => employeeDisplayName(e) },
   { header: "Work Email", get: (e) => e.work_email ?? "" },
   { header: "Last Name", get: (e) => e.last_name ?? "" },
   { header: "Middle Name", get: (e) => e.middle_name ?? "" },
