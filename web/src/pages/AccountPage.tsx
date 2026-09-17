@@ -151,8 +151,7 @@ export function AccountPage() {
         {setup ? (
           <form onSubmit={confirmTwoFactorSetup} className="flex flex-col gap-2">
             <p className="text-sm text-ink-muted">
-              Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, ...), then
-              enter the 6-digit code it shows.
+              Scan this QR code with your Microsoft Authenticator App, then enter the 6-digit code it shows.
             </p>
             <img src={setup.qr_code_data_url} alt="2FA setup QR code" className="w-40 h-40 self-center" />
             <p className="text-xs text-ink-faint">
