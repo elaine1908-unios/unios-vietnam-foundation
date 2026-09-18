@@ -887,7 +887,9 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
   // month is optional — omit it for the whole year, or pass 1-12 to narrow
   // to one calendar month within that year.
   const monthParam = req.query.month != null && req.query.month !== "" ? String(req.query.month) : null;
-  if (monthParam !== null && !/^([1-9]|1[0-2])$/.test(monthParam)) {
+  // Accepts "9" and "09" alike — the UI only ever sends the unpadded form,
+  // but a hand-built URL or future caller could reasonably send either.
+  if (monthParam !== null && !/^(0?[1-9]|1[0-2])$/.test(monthParam)) {
     res.status(400).json({ error: "month must be between 1 and 12." });
     return;
   }
