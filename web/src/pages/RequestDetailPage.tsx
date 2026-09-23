@@ -6,7 +6,7 @@ import type { AlDetails, BtDetails, OtDetails, RequestRecord } from "../lib/type
 import { REQUEST_TYPE_LABELS } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
 import { ALRequestForm, BTRequestForm, OTRequestForm } from "../components/RequestForms";
-import { StatusBadge, requestPeriod } from "./RequestsPage";
+import { StatusBadge, requestPeriod } from "../lib/requestDisplay";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -183,8 +183,8 @@ export function RequestDetailPage() {
 
   return (
     <div className="max-w-3xl">
-      <Link to="/requests" className="text-sm text-accent hover:underline">
-        ← Submit AL, OT & BT
+      <Link to="/requests/mine" className="text-sm text-accent hover:underline">
+        ← My Requests
       </Link>
       <div className="flex items-center justify-between mt-1 mb-4 gap-3">
         <div>

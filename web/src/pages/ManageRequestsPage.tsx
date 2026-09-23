@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { RequestManageResponse, RequestStatus, RequestType } from "../lib/types";
 import { REQUEST_STATUS_LABELS, REQUEST_TYPE_LABELS } from "../lib/types";
-import { requestPeriod, requestSummary, StatusBadge } from "./RequestsPage";
+import { requestPeriod, requestSummary, StatusBadge } from "../lib/requestDisplay";
 import { employeeDisplayName } from "../lib/vietnamese";
 import { useAuth } from "../auth/AuthProvider";
 

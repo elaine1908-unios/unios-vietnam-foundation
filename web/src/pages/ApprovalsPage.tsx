@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import type { RequestRecord } from "../lib/types";
 import { REQUEST_TYPE_LABELS } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
-import { StatusBadge, requestPeriod, requestSummary } from "./RequestsPage";
+import { StatusBadge, requestPeriod, requestSummary } from "../lib/requestDisplay";
 
 export function ApprovalsPage() {
   const { data, isLoading, error } = useQuery({

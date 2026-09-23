@@ -1,7 +1,11 @@
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthProvider";
 import { UniosLogo } from "../components/UniosLogo";
+import { api } from "../lib/api";
 import { ACCESS_LEVEL_LABELS } from "../lib/types";
+import type { RequestRecord } from "../lib/types";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-3 py-2 text-sm ${isActive ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"}`;
@@ -29,18 +33,32 @@ export function AppLayout() {
     pathname.startsWith("/employees") &&
     !pathname.startsWith("/employees/dashboard") &&
     !pathname.startsWith("/employees/org-chart");
-  // Same reasoning as Employee Master above — /requests/manage and
-  // /requests/import are their own top-level nav items under the same
-  // "/requests" prefix, so a plain prefix-matching NavLink would light up
-  // both "Submit" and "Manage" at once while on the Manage page.
-  const submitRequestsActive =
-    pathname.startsWith("/requests") &&
-    !pathname.startsWith("/requests/manage") &&
-    !pathname.startsWith("/requests/import");
-  // Import is Admin/BOD-only and only reached from a link on the Manage
-  // page (no sidebar item of its own), so it counts as part of "Manage"
-  // being active rather than falling back to "Submit" via prefix match.
+
+  // "AL, OT & BT" is a collapsible group (Submit/Manage/My Requests/
+  // Approvals) rather than flat nav items, so each sub-link needs its own
+  // exact/prefix match instead of one NavLink's default prefix match —
+  // otherwise "Submit" would also light up on /requests/manage, etc.
+  // Import has no sidebar item of its own (reached only from a link on
+  // Manage), so it counts as part of Manage being active.
+  const submitRequestsActive = pathname === "/requests";
   const manageRequestsActive = pathname.startsWith("/requests/manage") || pathname.startsWith("/requests/import");
+  const myRequestsActive = pathname.startsWith("/requests/mine");
+  const approvalsActive = pathname.startsWith("/requests/approvals");
+  const requestsGroupActive = pathname.startsWith("/requests");
+  const [requestsExpanded, setRequestsExpanded] = useState(() => pathname.startsWith("/requests"));
+  useEffect(() => {
+    if (pathname.startsWith("/requests")) setRequestsExpanded(true);
+  }, [pathname]);
+
+  // Fetched once here (rather than on whichever page happens to be open)
+  // so the sidebar's Approvals badge stays live regardless of which
+  // AL/OT/BT page you're actually on — same query key as ApprovalsPage/
+  // MyRequestsPage use for their own fetches, so this dedupes with them.
+  const { data: approvals } = useQuery({
+    queryKey: ["requests", "approvals"],
+    queryFn: () => api.get<RequestRecord[]>("/requests/approvals"),
+  });
+  const pendingApprovalCount = approvals?.length ?? 0;
 
   return (
     <div className="min-h-screen flex">
@@ -50,16 +68,52 @@ export function AppLayout() {
           <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint">Careers and Foundation</p>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
-          {/* Visible to every signed-in user, same reasoning as My Profile —
-              self-service AL/OT/BT submission isn't gated by capability. */}
-          <Link to="/requests" className={navLinkClass({ isActive: submitRequestsActive })}>
-            Submit AL, OT & BT
-          </Link>
-          {canManageRequests && (
-            <Link to="/requests/manage" className={navLinkClass({ isActive: manageRequestsActive })}>
-              Manage AL, OT & BT
-            </Link>
-          )}
+          <div>
+            <button
+              type="button"
+              onClick={() => setRequestsExpanded((v) => !v)}
+              className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-sm ${
+                requestsGroupActive ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"
+              }`}
+              aria-expanded={requestsExpanded}
+            >
+              <span>AL, OT & BT</span>
+              <span
+                className={`text-xs transition-transform ${requestsExpanded ? "rotate-90" : ""}`}
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+            </button>
+            {requestsExpanded && (
+              <div className="flex flex-col gap-1 mt-1 pl-3 border-l border-border ml-3">
+                {/* Visible to every signed-in user, same reasoning as My
+                    Profile — self-service AL/OT/BT submission isn't gated
+                    by capability. */}
+                <Link to="/requests" className={navLinkClass({ isActive: submitRequestsActive })}>
+                  Submit
+                </Link>
+                {canManageRequests && (
+                  <Link to="/requests/manage" className={navLinkClass({ isActive: manageRequestsActive })}>
+                    Manage
+                  </Link>
+                )}
+                <Link to="/requests/mine" className={navLinkClass({ isActive: myRequestsActive })}>
+                  My Requests
+                </Link>
+                <Link to="/requests/approvals" className={navLinkClass({ isActive: approvalsActive })}>
+                  <span className="inline-flex items-center gap-1.5">
+                    Approvals
+                    {pendingApprovalCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full bg-status-critical text-white text-xs font-medium px-1">
+                        {pendingApprovalCount}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </div>
+            )}
+          </div>
           {canViewEmployees && (
             <NavLink to="/employees/dashboard" className={navLinkClass}>
               Employee Dashboard

@@ -8,6 +8,7 @@ import { SetupPage } from "./pages/SetupPage";
 import { AccountPage } from "./pages/AccountPage";
 import { MyProfilePage } from "./pages/MyProfilePage";
 import { RequestsPage } from "./pages/RequestsPage";
+import { MyRequestsPage } from "./pages/MyRequestsPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { ManageRequestsPage } from "./pages/ManageRequestsPage";
@@ -61,6 +62,7 @@ export function App() {
               <Route path="/account" element={<AccountPage />} />
               <Route path="/my-profile" element={<MyProfilePage />} />
               <Route path="/requests" element={<RequestsPage />} />
+              <Route path="/requests/mine" element={<MyRequestsPage />} />
               <Route path="/requests/approvals" element={<ApprovalsPage />} />
               <Route
                 path="/requests/manage"
