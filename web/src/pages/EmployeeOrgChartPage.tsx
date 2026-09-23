@@ -11,6 +11,21 @@ interface OrgNode extends EmployeeSummary {
   children: OrgNode[];
 }
 
+// Highest rank first (Divisional, Leadership, Specialists, Core) — employees
+// stored as employees.rank hold the full CAREER_RANK_LABELS string (see
+// roleDerivedFields on the server), not the raw key, so this maps straight
+// off that. Unranked employees sort after every ranked one.
+const RANK_SORT_ORDER = [
+  CAREER_RANK_LABELS.divisional,
+  CAREER_RANK_LABELS.leadership,
+  CAREER_RANK_LABELS.specialists,
+  CAREER_RANK_LABELS.core,
+];
+function rankSortIndex(rank: string | null): number {
+  const idx = rank ? RANK_SORT_ORDER.indexOf(rank) : -1;
+  return idx === -1 ? RANK_SORT_ORDER.length : idx;
+}
+
 // Built entirely from the same Report To links Employee Master already
 // shows — no separate endpoint. A node whose manager isn't in the current
 // (on-going, scope-filtered) result set becomes a root of its own, same as
@@ -26,9 +41,15 @@ function buildReportToTree(employees: EmployeeSummary[]): OrgNode[] {
     if (manager) manager.children.push(node);
     else roots.push(node);
   }
-  const byName = (a: OrgNode, b: OrgNode) => employeeDisplayName(a).localeCompare(employeeDisplayName(b));
+  // Rank first (Divisional -> Core), then name as a tiebreaker within the
+  // same rank — same "highest rank reads first" convention the Department/
+  // Function view already uses for Leadership.
+  const byRankThenName = (a: OrgNode, b: OrgNode) => {
+    const rankDiff = rankSortIndex(a.rank) - rankSortIndex(b.rank);
+    return rankDiff !== 0 ? rankDiff : employeeDisplayName(a).localeCompare(employeeDisplayName(b));
+  };
   function sortRec(nodes: OrgNode[]) {
-    nodes.sort(byName);
+    nodes.sort(byRankThenName);
     for (const n of nodes) sortRec(n.children);
   }
   sortRec(roots);
