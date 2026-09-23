@@ -26,8 +26,11 @@ export function LoginPage() {
   if (loading) return null;
   if (user) {
     // Employee Dashboard is the default landing page for anyone who can
-    // reach it; a plain Team Member (no employee.view) lands on Performance
-    // Profiles instead, same as before this page existed.
+    // reach it (Team Lead and up, via employee.view); a plain Team Member
+    // lands on Performance Profiles instead, same as before this page
+    // existed. Extending this to "anyone with direct reports" would also
+    // need widening actual data access (currently Team Lead+ only) — asked
+    // about and declined, so this stays capability-based.
     const landingPath = user.capabilities.includes("employee.view") ? "/employees/dashboard" : "/profiles";
     return <Navigate to={landingPath} replace />;
   }

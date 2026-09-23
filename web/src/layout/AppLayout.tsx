@@ -6,9 +6,15 @@ import { UniosLogo } from "../components/UniosLogo";
 import { api } from "../lib/api";
 import { ACCESS_LEVEL_LABELS } from "../lib/types";
 import type { RequestRecord } from "../lib/types";
+import { BriefcaseIcon, CalendarIcon, DashboardIcon, ShieldCheckIcon, UsersIcon } from "../components/NavIcons";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `rounded-md px-3 py-2 text-sm ${isActive ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"}`;
+  `flex items-center gap-2 rounded-md px-3 py-2 text-sm ${isActive ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"}`;
+
+const groupToggleClass = (active: boolean) =>
+  `w-full flex items-center justify-between rounded-md px-3 py-2 text-sm ${
+    active ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"
+  }`;
 
 // Header buttons (User Management, Audit Log) — a bordered "chip" style
 // distinct from the sidebar's flat nav links, matching po-so-tracker's own
@@ -50,6 +56,26 @@ export function AppLayout() {
     if (pathname.startsWith("/requests")) setRequestsExpanded(true);
   }, [pathname]);
 
+  // "Careers" groups Performance Profiles/Job Descriptions/Career Map/Org
+  // Chart, same collapsible pattern as "AL, OT & BT" above. Performance
+  // Profiles keeps its pre-existing exact-match behavior (a profile detail
+  // page doesn't light up the "Performance Profiles" row specifically) —
+  // only the group-active/auto-expand check is a broader prefix match, so
+  // the group itself still opens up while viewing one.
+  const performanceProfilesActive = pathname === "/profiles";
+  const jobDescriptionsActive = pathname.startsWith("/job-descriptions");
+  const careerMapActive = pathname.startsWith("/career-map");
+  const orgChartActive = pathname.startsWith("/employees/org-chart");
+  const careersGroupActive =
+    pathname.startsWith("/profiles") ||
+    pathname.startsWith("/job-descriptions") ||
+    pathname.startsWith("/career-map") ||
+    pathname.startsWith("/employees/org-chart");
+  const [careersExpanded, setCareersExpanded] = useState(() => careersGroupActive);
+  useEffect(() => {
+    if (careersGroupActive) setCareersExpanded(true);
+  }, [pathname, careersGroupActive]);
+
   // Fetched once here (rather than on whichever page happens to be open)
   // so the sidebar's Approvals badge stays live regardless of which
   // AL/OT/BT page you're actually on — same query key as ApprovalsPage/
@@ -68,16 +94,26 @@ export function AppLayout() {
           <p className="font-display font-normal text-sm tracking-[0.0125em] text-ink-faint">Careers and Foundation</p>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
+          {/* On top — the default landing page for a Team Lead or anyone
+              with direct reports (see LoginPage.tsx), so it's the first
+              thing they see in the sidebar too. */}
+          {canViewEmployees && (
+            <NavLink to="/employees/dashboard" className={navLinkClass}>
+              <DashboardIcon className="w-4 h-4 shrink-0" />
+              Employee Dashboard
+            </NavLink>
+          )}
           <div>
             <button
               type="button"
               onClick={() => setRequestsExpanded((v) => !v)}
-              className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-sm ${
-                requestsGroupActive ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"
-              }`}
+              className={groupToggleClass(requestsGroupActive)}
               aria-expanded={requestsExpanded}
             >
-              <span>AL, OT & BT</span>
+              <span className="flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4 shrink-0" />
+                AL, OT & BT
+              </span>
               <span
                 className={`text-xs transition-transform ${requestsExpanded ? "rotate-90" : ""}`}
                 aria-hidden="true"
@@ -114,36 +150,57 @@ export function AppLayout() {
               </div>
             )}
           </div>
-          {canViewEmployees && (
-            <NavLink to="/employees/dashboard" className={navLinkClass}>
-              Employee Dashboard
-            </NavLink>
-          )}
-          <NavLink to="/profiles" end className={navLinkClass}>
-            Performance Profiles
-          </NavLink>
-          <NavLink to="/job-descriptions" className={navLinkClass}>
-            Job Descriptions
-          </NavLink>
-          {/* Viewable by every access level — the page itself gates its own
-              Add/Edit/Archive controls on careerrole.* capabilities. */}
-          <NavLink to="/career-map" className={navLinkClass}>
-            Career Map
-          </NavLink>
+          <div>
+            <button
+              type="button"
+              onClick={() => setCareersExpanded((v) => !v)}
+              className={groupToggleClass(careersGroupActive)}
+              aria-expanded={careersExpanded}
+            >
+              <span className="flex items-center gap-2">
+                <BriefcaseIcon className="w-4 h-4 shrink-0" />
+                Careers
+              </span>
+              <span
+                className={`text-xs transition-transform ${careersExpanded ? "rotate-90" : ""}`}
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+            </button>
+            {careersExpanded && (
+              <div className="flex flex-col gap-1 mt-1 pl-3 border-l border-border ml-3">
+                <Link to="/profiles" className={navLinkClass({ isActive: performanceProfilesActive })}>
+                  Performance Profiles
+                </Link>
+                <Link to="/job-descriptions" className={navLinkClass({ isActive: jobDescriptionsActive })}>
+                  Job Descriptions
+                </Link>
+                {/* Viewable by every access level — the page itself gates
+                    its own Add/Edit/Archive controls on careerrole.*
+                    capabilities. */}
+                <Link to="/career-map" className={navLinkClass({ isActive: careerMapActive })}>
+                  Career Map
+                </Link>
+                {canViewEmployees && (
+                  <Link to="/employees/org-chart" className={navLinkClass({ isActive: orgChartActive })}>
+                    Org Chart
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
           {/* Viewable by every access level, same as Career Map — only the
               edit mode is gated (codeofconduct.edit, Admin/BOD). */}
           <NavLink to="/code-of-conduct" className={navLinkClass}>
+            <ShieldCheckIcon className="w-4 h-4 shrink-0" />
             Code of Conduct
           </NavLink>
           {canViewEmployees && (
             <Link to="/employees" className={navLinkClass({ isActive: employeeMasterActive })}>
+              <UsersIcon className="w-4 h-4 shrink-0" />
               Employee Master
             </Link>
-          )}
-          {canViewEmployees && (
-            <NavLink to="/employees/org-chart" className={navLinkClass}>
-              Org Chart
-            </NavLink>
           )}
         </nav>
       </aside>
