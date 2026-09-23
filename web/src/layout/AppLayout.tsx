@@ -6,7 +6,14 @@ import { UniosLogo } from "../components/UniosLogo";
 import { api } from "../lib/api";
 import { ACCESS_LEVEL_LABELS } from "../lib/types";
 import type { RequestRecord } from "../lib/types";
-import { BriefcaseIcon, CalendarIcon, DashboardIcon, ShieldCheckIcon, UsersIcon } from "../components/NavIcons";
+import {
+  ArrowRightIcon,
+  BriefcaseIcon,
+  CalendarIcon,
+  DashboardIcon,
+  ShieldCheckIcon,
+  UsersIcon,
+} from "../components/NavIcons";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-2 rounded-md px-3 py-2 text-sm ${isActive ? "bg-accent-soft text-accent font-medium" : "text-ink-muted hover:bg-surface-2"}`;
@@ -114,12 +121,9 @@ export function AppLayout() {
                 <CalendarIcon className="w-4 h-4 shrink-0" />
                 AL, OT & BT
               </span>
-              <span
-                className={`text-xs transition-transform ${requestsExpanded ? "rotate-90" : ""}`}
-                aria-hidden="true"
-              >
-                ▸
-              </span>
+              <ArrowRightIcon
+                className={`w-3.5 h-3.5 shrink-0 transition-transform ${requestsExpanded ? "rotate-90" : ""}`}
+              />
             </button>
             {requestsExpanded && (
               <div className="flex flex-col gap-1 mt-1 pl-3 border-l border-border ml-3">
@@ -161,12 +165,9 @@ export function AppLayout() {
                 <BriefcaseIcon className="w-4 h-4 shrink-0" />
                 Careers
               </span>
-              <span
-                className={`text-xs transition-transform ${careersExpanded ? "rotate-90" : ""}`}
-                aria-hidden="true"
-              >
-                ▸
-              </span>
+              <ArrowRightIcon
+                className={`w-3.5 h-3.5 shrink-0 transition-transform ${careersExpanded ? "rotate-90" : ""}`}
+              />
             </button>
             {careersExpanded && (
               <div className="flex flex-col gap-1 mt-1 pl-3 border-l border-border ml-3">

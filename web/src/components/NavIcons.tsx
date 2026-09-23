@@ -69,6 +69,17 @@ export function ShieldCheckIcon(props: { className?: string }) {
   );
 }
 
+// Collapsible group toggle (AL, OT & BT / Careers) — a straight arrow
+// instead of a "▸" glyph, rotated by the caller when the group is open.
+export function ArrowRightIcon(props: { className?: string }) {
+  return (
+    <Icon {...props}>
+      <path d="M4 12h16" />
+      <path d="M13 6l7 6-7 6" />
+    </Icon>
+  );
+}
+
 // Employee Master
 export function UsersIcon(props: { className?: string }) {
   return (
