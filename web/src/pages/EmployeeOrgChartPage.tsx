@@ -35,55 +35,87 @@ function buildReportToTree(employees: EmployeeSummary[]): OrgNode[] {
   return roots;
 }
 
-function EmployeeCard({ node }: { node: OrgNode }) {
+// Vertical (indented, file-tree-style) node — each employee on their own
+// row, direct reports nested and indented below via a single left border
+// rather than the old horizontal side-by-side branching, which only got
+// harder to read (and to scroll) as the reporting chain grew wide.
+function EmployeeRow({ node }: { node: OrgNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
   return (
-    <li>
-      <div className="card !p-3 w-56 relative">
-        <Link
-          to={`/employees/${node.id}`}
-          className="text-accent font-medium hover:underline inline-flex items-center gap-1.5 text-sm"
+    <div>
+      <div className="flex items-center gap-2 py-1">
+        <button
+          className={`w-5 h-5 shrink-0 rounded border text-xs flex items-center justify-center ${
+            hasChildren
+              ? "border-border text-ink-muted hover:bg-surface-2"
+              : "border-transparent text-transparent pointer-events-none"
+          }`}
+          onClick={() => setCollapsed((c) => !c)}
+          title={hasChildren ? (collapsed ? `Show ${node.children.length} direct report(s)` : "Collapse") : undefined}
+          type="button"
+          tabIndex={hasChildren ? 0 : -1}
         >
-          {employeeDisplayName(node)}
-          {node.is_offshore && <OffshoreIcon className="w-3.5 h-3.5 shrink-0" />}
-        </Link>
-        <p className="text-xs text-ink-muted mt-0.5">
-          {node.department || "—"}
-          {node.rank ? ` · ${rankBadge(node.rank)}` : ""}
-        </p>
-        {hasChildren && (
-          <button
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-border bg-surface text-xs text-ink-muted w-6 h-6 hover:bg-surface-2"
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? `Show ${node.children.length} direct report(s)` : "Collapse"}
-            type="button"
+          {hasChildren ? (collapsed ? "+" : "–") : ""}
+        </button>
+        <div className="card !p-2.5 !py-1.5 inline-flex items-center gap-3 max-w-md">
+          <Link
+            to={`/employees/${node.id}`}
+            className="text-accent font-medium hover:underline inline-flex items-center gap-1.5 text-sm whitespace-nowrap"
           >
-            {collapsed ? node.children.length : "–"}
-          </button>
-        )}
+            {employeeDisplayName(node)}
+            {node.is_offshore && <OffshoreIcon className="w-3.5 h-3.5 shrink-0" />}
+          </Link>
+          <p className="text-xs text-ink-muted whitespace-nowrap">
+            {node.department || "—"}
+            {node.rank ? ` · ${rankBadge(node.rank)}` : ""}
+          </p>
+        </div>
       </div>
       {hasChildren && !collapsed && (
-        <ul>
+        <div className="ml-2.5 pl-4 border-l border-border flex flex-col">
           {node.children.map((child) => (
-            <EmployeeCard key={child.id} node={child} />
+            <EmployeeRow key={child.id} node={child} />
           ))}
-        </ul>
+        </div>
       )}
-    </li>
+    </div>
   );
 }
 
-function ReportToChart({ employees }: { employees: EmployeeSummary[] }) {
-  const roots = useMemo(() => buildReportToTree(employees), [employees]);
-  if (roots.length === 0) return <p className="text-sm text-ink-muted">No on-going employees to show.</p>;
+function VerticalTree({ roots, emptyText }: { roots: OrgNode[]; emptyText: string }) {
+  if (roots.length === 0) return <p className="text-sm text-ink-muted">{emptyText}</p>;
   return (
-    <div className="overflow-x-auto pb-6">
-      <ul className="org-tree">
-        {roots.map((root) => (
-          <EmployeeCard key={root.id} node={root} />
-        ))}
-      </ul>
+    <div className="flex flex-col">
+      {roots.map((root) => (
+        <EmployeeRow key={root.id} node={root} />
+      ))}
+    </div>
+  );
+}
+
+// Offshore staff are set aside into their own section rather than nested
+// among onshore managers — an offshore employee never appears inside the
+// main tree, and vice versa, each built as its own independent reporting
+// tree (an onshore employee who happens to report to an offshore manager
+// becomes a root of their own, same "manager not in this set" fallback
+// buildReportToTree already uses for a scoped viewer).
+function ReportToChart({ employees }: { employees: EmployeeSummary[] }) {
+  const onshore = useMemo(() => employees.filter((e) => !e.is_offshore), [employees]);
+  const offshore = useMemo(() => employees.filter((e) => e.is_offshore), [employees]);
+  const onshoreRoots = useMemo(() => buildReportToTree(onshore), [onshore]);
+  const offshoreRoots = useMemo(() => buildReportToTree(offshore), [offshore]);
+  return (
+    <div className="flex flex-col gap-8">
+      <VerticalTree roots={onshoreRoots} emptyText="No on-going employees to show." />
+      {offshore.length > 0 && (
+        <div>
+          <h2 className="font-display font-semibold text-sm text-ink-muted mb-2 flex items-center gap-1.5 pt-4 border-t border-border">
+            <OffshoreIcon className="w-3.5 h-3.5" /> Offshore
+          </h2>
+          <VerticalTree roots={offshoreRoots} emptyText="No offshore employees to show." />
+        </div>
+      )}
     </div>
   );
 }
