@@ -24,15 +24,25 @@ function isNonWorkingDay(d: Date): boolean {
   const dd = String(d.getDate()).padStart(2, "0");
   return VN_FIXED_HOLIDAYS.has(`${mm}-${dd}`);
 }
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
 // Return to Work Date is the day you're back at work, not the last day of
 // leave — for a Full Day request it's an exclusive upper bound (Friday
-// start, Monday return = 1 working day, not 2).
+// start, Monday return = 1 working day, not 2). A half-day scales the same
+// idea down: Morning off means back that same afternoon (Return = Start),
+// Afternoon off means back the following day (Return = Start + 1) — see
+// validateHalfDayDates in server/src/routes/requests.ts, which is what
+// actually enforces this relationship on submit.
 export function calcAlDays(start: string, end: string, duration: string): number {
   if (!start || !end) return 0;
   const s = parseISODate(start);
   const e = parseISODate(end);
   if (e < s) return 0;
-  if (duration !== "Full Day") return s.getTime() === e.getTime() && !isNonWorkingDay(s) ? 0.5 : 0;
+  if (duration !== "Full Day") {
+    const expectedSpan = duration === "Afternoon" ? 1 : 0;
+    return daysBetween(s, e) === expectedSpan && !isNonWorkingDay(s) ? 0.5 : 0;
+  }
   let count = 0;
   const cur = new Date(s);
   while (cur < e) {
@@ -251,6 +261,17 @@ export function ALRequestForm({ initial, ...handlers }: { initial?: Partial<AlDe
       {duration === "Full Day" && (
         <p className="text-xs text-ink-faint -mt-2">
           The day you're back at work — for one day off, set this to the next working day, not the same day.
+        </p>
+      )}
+      {duration === "Morning" && (
+        <p className="text-xs text-ink-faint -mt-2">
+          A Morning-off request must use the same Start Date and Return to Work Date — you're back that same
+          afternoon.
+        </p>
+      )}
+      {duration === "Afternoon" && (
+        <p className="text-xs text-ink-faint -mt-2">
+          Return to Work Date must be the day after Start Date — you don't return until the following day.
         </p>
       )}
       <Field label="Leave Duration *">

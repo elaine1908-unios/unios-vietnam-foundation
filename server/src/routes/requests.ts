@@ -71,6 +71,10 @@ function isWeekend(d: Date): boolean {
   return day === 0 || day === 6;
 }
 
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
 // Vietnam's fixed (solar-calendar) public holidays only — same date every
 // year, no lookup table needed. Deliberately excludes Tết, Hùng Kings' Day,
 // and National Day's government-chosen adjacent day, since those move or
@@ -100,19 +104,27 @@ function parseHM(s: string): number {
 // Return to Work Date is the day the employee is BACK at work, not the
 // last day of leave — so for a Full Day request it's an exclusive upper
 // bound: a Friday start with a Monday return is 1 working day (Friday
-// only), not 2. A half-day request has no such boundary (start ===
-// return represents the single day it applies to), so that path is
-// unaffected. `countWeekends` defaults to false (the normal "weekends and
-// Vietnam's fixed public holidays aren't working days" rule for a live
-// submission) — the historical import is the one caller that can override
-// it per-row, for a company that sometimes treats a Saturday (or a
-// holiday) as a working day.
+// only), not 2. A half-day request follows the same "day you're back"
+// idea, just scaled down: Morning off means you're back at work that same
+// afternoon, so Return to Work Date equals Start Date; Afternoon off means
+// you don't return until the following day, so Return to Work Date is
+// exactly one calendar day after Start Date (see validateHalfDayDates,
+// which enforces this exact relationship before this function ever runs).
+// Either way it's always the Start Date's afternoon/morning being taken
+// off, so that's the date checked against weekends/holidays — the Return
+// Date itself is never a working day either way, it's just where the
+// "day you're back" marker lands. `countWeekends` defaults to false (the
+// normal "weekends and Vietnam's fixed public holidays aren't working
+// days" rule for a live submission) — the historical import is the one
+// caller that can override it per-row, for a company that sometimes
+// treats a Saturday (or a holiday) as a working day.
 function calcAlDays(startDate: string, returnDate: string, duration: string, countWeekends = false): number {
   const start = parseISODate(startDate);
   const end = parseISODate(returnDate);
   if (end < start) return 0;
   if (duration !== "Full Day") {
-    return start.getTime() === end.getTime() && (countWeekends || !isNonWorkingDay(start)) ? 0.5 : 0;
+    const expectedSpan = duration === "Afternoon" ? 1 : 0;
+    return daysBetween(start, end) === expectedSpan && (countWeekends || !isNonWorkingDay(start)) ? 0.5 : 0;
   }
   let count = 0;
   const cur = new Date(start);
@@ -121,6 +133,21 @@ function calcAlDays(startDate: string, returnDate: string, duration: string, cou
     cur.setDate(cur.getDate() + 1);
   }
   return count;
+}
+
+// Validates the Start/Return date relationship a given duration requires —
+// see calcAlDays' comment above for why Morning and Afternoon differ.
+// Shared between the live submit path (validateForSubmit) and the
+// historical CSV import's row validation, so the rule can't drift between
+// the two entry points.
+function validateHalfDayDates(startDate: string, returnDate: string, duration: string): string | null {
+  if (duration === "Morning" && startDate !== returnDate) {
+    return "A Morning request must have the same Start Date and Return to Work Date.";
+  }
+  if (duration === "Afternoon" && daysBetween(parseISODate(startDate), parseISODate(returnDate)) !== 1) {
+    return "An Afternoon request's Return to Work Date must be the day after the Start Date.";
+  }
+  return null;
 }
 
 // end <= start is always treated as crossing midnight (there's no separate
@@ -335,8 +362,9 @@ function validateForSubmit(type: RequestType, body: RequestBody): string | null 
   const shapeError = validateShape(type, body);
   if (shapeError) return shapeError;
   if (type === "AL") {
-    if (body.duration !== "Full Day" && body.start_date !== body.return_to_work_date) {
-      return "A half-day (Morning/Afternoon) request must have the same Start Date and Return to Work Date.";
+    if (body.duration !== "Full Day") {
+      const halfDayError = validateHalfDayDates(body.start_date!, body.return_to_work_date!, body.duration!);
+      if (halfDayError) return halfDayError;
     }
     // Return to Work Date is the day you're back at work, so for a Full
     // Day request it must be strictly after Start Date — even a single
@@ -491,11 +519,9 @@ function validateImportRow(type: RequestType, raw: Record<string, string>, rowNu
     if (!LEAVE_DURATIONS.includes(duration)) {
       return { row: rowNumber, error: `Duration must be one of: ${LEAVE_DURATIONS.join(", ")}.` };
     }
-    if (duration !== "Full Day" && startDate !== returnDate) {
-      return {
-        row: rowNumber,
-        error: "A half-day (Morning/Afternoon) request must have the same Start Date and Return to Work Date.",
-      };
+    if (duration !== "Full Day") {
+      const halfDayError = validateHalfDayDates(startDate, returnDate, duration);
+      if (halfDayError) return { row: rowNumber, error: halfDayError };
     }
     // Same "Return to Work Date is exclusive" rule as a live submission
     // (see calcAlDays) — a Full Day row needs the next working day as its
