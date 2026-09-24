@@ -225,6 +225,9 @@ export function EmployeeDetailPage() {
         <InfoRow label="Contract No." value={e.contract_no} />
         <InfoRow label="Start Date" value={e.contract_start_date} />
         <InfoRow label="End Date" value={e.contract_end_date} />
+        {/* Computed from Commencement Date, not stored — see
+            server/src/alEntitlement.ts. */}
+        <InfoRow label="Annual Leave Entitlement (days/year)" value={String(e.annual_leave_entitlement_days)} />
       </Section>
 
       {canViewSensitive && (

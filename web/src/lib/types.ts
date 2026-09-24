@@ -170,9 +170,11 @@ export interface EmployeeDetail {
   contract_no: string | null;
   contract_start_date: string | null;
   contract_end_date: string | null;
-  // Flat annual amount, no accrual/carry-over — see routes/requests.ts's
-  // alDaysUsed for how it's actually spent against (Annual Leave-type
-  // approved requests only, scoped to the request's start-date year).
+  // Computed from commencement_date server-side (see alEntitlement.ts) —
+  // not a stored/editable value. Flat annual amount, no accrual/carry-over
+  // beyond the tenure tiers; see routes/requests.ts's alDaysUsed for how
+  // it's actually spent against (Annual Leave-type approved requests only,
+  // scoped to the request's start-date year).
   annual_leave_entitlement_days: number;
   // Department/Position/Rank are set only by picking a Career Map role
   // (dropdown, not free text) — this is the traceability link, same pattern
@@ -189,9 +191,8 @@ export interface EmployeeDetail {
   updated_at: string;
 }
 
-// annual_leave_entitlement_days is optional here (unlike EmployeeDetail,
-// where a fetched record always has one) — the CSV import path doesn't set
-// it at all, matching the server's own fallback-to-12 in resolveEntitlementDays.
+// annual_leave_entitlement_days isn't part of the input shape at all — it's
+// computed server-side, never sent when creating/editing an employee.
 export type EmployeeInput = Omit<
   EmployeeDetail,
   | "id"
@@ -202,7 +203,7 @@ export type EmployeeInput = Omit<
   | "career_map_role"
   | "report_to_employee"
   | "annual_leave_entitlement_days"
-> & { annual_leave_entitlement_days?: number };
+>;
 
 export interface AuditLogEntry {
   id: string;

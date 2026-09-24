@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { api, ApiError } from "../lib/api";
 import { LEAVE_DURATIONS, LEAVE_TYPES, OT_LOCATIONS } from "../lib/types";
 import type { AlDetails, BtDetails, OtDetails } from "../lib/types";
 
@@ -115,15 +116,115 @@ export interface RequestFormHandle<T> {
   submitting: boolean;
 }
 
+export interface AlBalance {
+  year: number;
+  entitlement: number;
+  used: number;
+  remaining: number;
+}
+
+// Shown before an Annual Leave submission actually goes through — fetches
+// the same entitlement/used math the server's own balance check in
+// POST /:id/submit uses (GET /requests/al-balance), so what this dialog
+// predicts and what the server ultimately allows can't disagree. Only
+// gates the "Annual Leave" leave type specifically — Marriage/Bereavement/
+// Unpaid don't draw from this entitlement at all (see alDaysUsed), so
+// there's nothing meaningful to confirm for those.
+export function ConfirmAlSubmitModal({
+  days,
+  balance,
+  balanceError,
+  onCancel,
+  onConfirm,
+  submitting,
+}: {
+  days: number;
+  balance: AlBalance | null;
+  balanceError: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+  submitting: boolean;
+}) {
+  const remainingAfter = balance ? balance.remaining - days : null;
+  const insufficient = remainingAfter != null && remainingAfter < 0;
+  return (
+    <div className="fixed inset-0 bg-ink/50 flex items-center justify-center p-4 z-50">
+      <div className="card max-w-sm w-full flex flex-col gap-3">
+        <h2 className="font-display font-semibold text-lg">Confirm Annual Leave submission</h2>
+        {balanceError ? (
+          <p className="text-sm text-status-warning">
+            Couldn't check your Annual Leave balance ({balanceError}) — you can still submit; the server will
+            confirm your balance when it processes this request.
+          </p>
+        ) : balance ? (
+          <div className="text-sm flex flex-col gap-1">
+            <p>
+              You have <span className="font-medium">{balance.remaining}</span> day(s) of Annual Leave remaining for{" "}
+              {balance.year}.
+            </p>
+            <p>
+              This request uses <span className="font-medium">{days}</span> day(s) — {remainingAfter} day(s) would
+              remain after submitting.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-ink-muted">Checking your Annual Leave balance…</p>
+        )}
+        {insufficient && (
+          <p className="text-sm text-status-critical">
+            This exceeds your remaining Annual Leave balance. If this time off isn't covered by Annual Leave,
+            consider submitting it as Other Unpaid Leave instead.
+          </p>
+        )}
+        <div className="flex gap-2 justify-end mt-1">
+          <button className="btn-secondary" type="button" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </button>
+          <button className="btn-primary" type="button" onClick={onConfirm} disabled={submitting}>
+            {submitting ? "Submitting…" : "Confirm & Submit"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ALRequestForm({ initial, ...handlers }: { initial?: Partial<AlDetails> } & RequestFormHandle<Partial<AlDetails>>) {
   const [leaveType, setLeaveType] = useState(initial?.leave_type ?? "Annual Leave");
   const [reason, setReason] = useState(initial?.reason ?? "");
   const [startDate, setStartDate] = useState(initial?.start_date ?? "");
   const [returnDate, setReturnDate] = useState(initial?.return_to_work_date ?? "");
   const [duration, setDuration] = useState(initial?.duration ?? "Full Day");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [balance, setBalance] = useState<AlBalance | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
 
   const data = { leave_type: leaveType, reason, start_date: startDate, return_to_work_date: returnDate, duration };
   const days = calcAlDays(startDate, returnDate, duration);
+
+  async function handleSubmitClick() {
+    // Only Annual Leave draws from the entitlement balance — the other
+    // leave types under this same tab skip straight to submitting.
+    if (leaveType !== "Annual Leave") {
+      handlers.onSubmit(data);
+      return;
+    }
+    setConfirmOpen(true);
+    setBalance(null);
+    setBalanceError(null);
+    try {
+      const year = startDate ? startDate.slice(0, 4) : String(new Date().getFullYear());
+      const result = await api.get<AlBalance>(`/requests/al-balance?year=${year}`);
+      setBalance(result);
+    } catch (err) {
+      setBalanceError(err instanceof ApiError ? err.message : "something went wrong");
+    }
+  }
+
+  function handleConfirmSubmit() {
+    setConfirmOpen(false);
+    handlers.onSubmit(data);
+  }
 
   return (
     <div className="card !p-4 flex flex-col gap-3">
@@ -173,8 +274,18 @@ export function ALRequestForm({ initial, ...handlers }: { initial?: Partial<AlDe
         error={handlers.error}
         onCancelEdit={handlers.onCancelEdit}
         onSaveDraft={() => handlers.onSaveDraft(data)}
-        onSubmit={() => handlers.onSubmit(data)}
+        onSubmit={handleSubmitClick}
       />
+      {confirmOpen && (
+        <ConfirmAlSubmitModal
+          days={days}
+          balance={balance}
+          balanceError={balanceError}
+          submitting={handlers.submitting}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={handleConfirmSubmit}
+        />
+      )}
     </div>
   );
 }

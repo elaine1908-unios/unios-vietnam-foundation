@@ -5,7 +5,8 @@ import { api, ApiError } from "../lib/api";
 import type { AlDetails, BtDetails, OtDetails, RequestRecord } from "../lib/types";
 import { REQUEST_TYPE_LABELS } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
-import { ALRequestForm, BTRequestForm, OTRequestForm } from "../components/RequestForms";
+import { ALRequestForm, BTRequestForm, OTRequestForm, ConfirmAlSubmitModal, calcAlDays } from "../components/RequestForms";
+import type { AlBalance } from "../components/RequestForms";
 import { StatusBadge, requestPeriod } from "../lib/requestDisplay";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -95,6 +96,9 @@ export function RequestDetailPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [alConfirmOpen, setAlConfirmOpen] = useState(false);
+  const [alBalance, setAlBalance] = useState<AlBalance | null>(null);
+  const [alBalanceError, setAlBalanceError] = useState<string | null>(null);
 
   const { data: r, isLoading, error } = useQuery({
     queryKey: ["requests", id],
@@ -134,6 +138,45 @@ export function RequestDetailPage() {
       setFormError(err instanceof ApiError ? err.message : "Something went wrong.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function doSubmit() {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await api.post(`/requests/${id}/submit`);
+      await refresh();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Same "confirm with balance" step as a brand-new AL submission (see
+  // ConfirmAlSubmitModal in RequestForms.tsx) — this is the other entry
+  // point into the same server action (POST /:id/submit), submitting an
+  // already-saved draft/needs_changes request as-is without re-entering
+  // edit mode. Only Annual Leave draws from the balance; every other type
+  // (and every other AL leave_type) submits directly, same as before.
+  async function handleSubmitClick() {
+    if (!r) return;
+    const isAnnualLeave = r.type === "AL" && (r.detail as AlDetails | null)?.leave_type === "Annual Leave";
+    if (!isAnnualLeave) {
+      await doSubmit();
+      return;
+    }
+    setAlConfirmOpen(true);
+    setAlBalance(null);
+    setAlBalanceError(null);
+    try {
+      const detail = r.detail as AlDetails;
+      const year = detail.start_date.slice(0, 4);
+      const result = await api.get<AlBalance>(`/requests/al-balance?year=${year}`);
+      setAlBalance(result);
+    } catch (err) {
+      setAlBalanceError(err instanceof ApiError ? err.message : "something went wrong");
     }
   }
 
@@ -255,23 +298,7 @@ export function RequestDetailPage() {
               </button>
             )}
             {r.viewer.can_submit && !editing && (
-              <button
-                className="btn-primary"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setActionError(null);
-                  try {
-                    await api.post(`/requests/${id}/submit`);
-                    await refresh();
-                  } catch (err) {
-                    setActionError(err instanceof ApiError ? err.message : "Something went wrong.");
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-                type="button"
-              >
+              <button className="btn-primary" disabled={busy} onClick={handleSubmitClick} type="button">
                 Submit
               </button>
             )}
@@ -348,6 +375,23 @@ export function RequestDetailPage() {
       <button className="text-sm text-ink-muted hover:text-ink mt-6" onClick={() => navigate(-1)} type="button">
         ← Back
       </button>
+      {alConfirmOpen && r?.type === "AL" && (
+        <ConfirmAlSubmitModal
+          days={calcAlDays(
+            (r.detail as AlDetails).start_date,
+            (r.detail as AlDetails).return_to_work_date,
+            (r.detail as AlDetails).duration,
+          )}
+          balance={alBalance}
+          balanceError={alBalanceError}
+          submitting={busy}
+          onCancel={() => setAlConfirmOpen(false)}
+          onConfirm={async () => {
+            setAlConfirmOpen(false);
+            await doSubmit();
+          }}
+        />
+      )}
     </div>
   );
 }

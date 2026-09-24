@@ -62,7 +62,6 @@ const EMPTY_FORM: EmployeeInput = {
   contract_no: "",
   contract_start_date: "",
   contract_end_date: "",
-  annual_leave_entitlement_days: 12,
 };
 
 function TextField({
@@ -171,6 +170,10 @@ export function EmployeeEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [missingLinkedRole, setMissingLinkedRole] = useState<CareerMapRole | null>(null);
   const [missingReportTo, setMissingReportTo] = useState<EmployeeSummary | null>(null);
+  // Display-only — computed server-side, not part of the editable
+  // EmployeeInput shape at all (see lib/types.ts), so it's kept separately
+  // from `form` rather than bolted onto a type that no longer declares it.
+  const [computedEntitlement, setComputedEntitlement] = useState<number | null>(null);
 
   const { data: roles = [] } = useQuery({
     queryKey: ["career-map"],
@@ -186,7 +189,10 @@ export function EmployeeEditPage() {
     if (isNew) return;
     api
       .get<EmployeeDetail>(`/employees/${id}`)
-      .then((e) => setForm(e))
+      .then((e) => {
+        setForm(e);
+        setComputedEntitlement(e.annual_leave_entitlement_days);
+      })
       .catch(() => setError("Couldn't load this employee."))
       .finally(() => setLoading(false));
   }, [id, isNew]);
@@ -245,10 +251,6 @@ export function EmployeeEditPage() {
 
   function setOffshore(value: boolean) {
     setForm((f) => ({ ...f, is_offshore: value }));
-  }
-
-  function setEntitlementDays(value: number) {
-    setForm((f) => ({ ...f, annual_leave_entitlement_days: value }));
   }
 
   function handleRoleSelect(roleId: string) {
@@ -431,14 +433,13 @@ export function EmployeeEditPage() {
           <DateField label="End Date" value={form.contract_end_date} onChange={(v) => set("contract_end_date", v)} />
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Annual Leave Entitlement (days/year)</span>
-            <input
-              className="input"
-              type="number"
-              min={0}
-              step={0.5}
-              value={form.annual_leave_entitlement_days}
-              onChange={(e) => setEntitlementDays(Number(e.target.value) || 0)}
-            />
+            <p className="input bg-surface-2 text-ink-muted">
+              {computedEntitlement != null ? computedEntitlement : "— (save first)"}
+            </p>
+            <span className="text-xs text-ink-faint">
+              Computed from Commencement Date — not editable. Under 1 year: 1 day/month worked. 1–5 years: 12 days.
+              5+ years: 13 days.
+            </span>
           </label>
         </div>
       </div>

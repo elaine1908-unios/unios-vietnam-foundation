@@ -5,6 +5,8 @@ import { requireAuth, requireCap } from "../middleware.js";
 import { logAudit } from "../audit.js";
 import { employeeScopeFor } from "./employees.js";
 import { hasCapability } from "../capabilities.js";
+import { resolvedChangedByName } from "../types.js";
+import { computeAlEntitlementDays } from "../alEntitlement.js";
 import type { PublicUser } from "../types.js";
 
 export const requestsRouter = Router();
@@ -29,13 +31,11 @@ const EMPLOYEE_REF_COLUMNS = "id, employee_code, last_name, middle_name, first_n
 
 function myEmployeeRow(
   user: PublicUser,
-): { id: string; report_to_employee_id: string | null; annual_leave_entitlement_days: number } | undefined {
+): { id: string; report_to_employee_id: string | null; commencement_date: string | null } | undefined {
   return db
-    .prepare(
-      "SELECT id, report_to_employee_id, annual_leave_entitlement_days FROM employees WHERE LOWER(work_email) = ?",
-    )
+    .prepare("SELECT id, report_to_employee_id, commencement_date FROM employees WHERE LOWER(work_email) = ?")
     .get(user.email.toLowerCase()) as
-    | { id: string; report_to_employee_id: string | null; annual_leave_entitlement_days: number }
+    | { id: string; report_to_employee_id: string | null; commencement_date: string | null }
     | undefined;
 }
 
@@ -210,15 +210,26 @@ function loadDetail(
   const detail = db.prepare(`SELECT * FROM ${detailTable} WHERE request_id = ?`).get(id) as
     | Record<string, unknown>
     | undefined;
-  const history = db
-    .prepare(
-      `SELECT audit_log.id, audit_log.action, audit_log.field_name, audit_log.old_value, audit_log.new_value,
-              audit_log.changed_at, users.name as changed_by_name
-       FROM audit_log LEFT JOIN users ON users.id = audit_log.changed_by
-       WHERE audit_log.entity_type = 'request' AND audit_log.entity_id = ?
-       ORDER BY audit_log.changed_at ASC`,
-    )
-    .all(id);
+  const history = (
+    db
+      .prepare(
+        `SELECT audit_log.id, audit_log.action, audit_log.field_name, audit_log.old_value, audit_log.new_value,
+                audit_log.changed_at, users.name as changed_by_name, users.email as changed_by_email
+         FROM audit_log LEFT JOIN users ON users.id = audit_log.changed_by
+         WHERE audit_log.entity_type = 'request' AND audit_log.entity_id = ?
+         ORDER BY audit_log.changed_at ASC`,
+      )
+      .all(id) as {
+      id: string;
+      action: string;
+      field_name: string | null;
+      old_value: string | null;
+      new_value: string | null;
+      changed_at: string;
+      changed_by_name: string | null;
+      changed_by_email: string | null;
+    }[]
+  ).map(resolvedChangedByName);
   const isOwner = viewerEmployeeId != null && row.employee_id === viewerEmployeeId;
   const isApprover = viewerEmployeeId != null && row.approver_id === viewerEmployeeId;
   const status = row.status as RequestStatus;
@@ -717,9 +728,10 @@ requestsRouter.post("/:id/submit", (req, res) => {
     const year = Number(body.start_date!.slice(0, 4));
     const used = alDaysUsed(me.id, year, existing.id);
     const requested = calcAlDays(body.start_date!, body.return_to_work_date!, body.duration!);
-    if (used + requested > me.annual_leave_entitlement_days) {
+    const entitlement = computeAlEntitlementDays(me.commencement_date);
+    if (used + requested > entitlement) {
       res.status(400).json({
-        error: `Not enough Annual Leave balance — ${me.annual_leave_entitlement_days - used} day(s) remaining for ${year}, ${requested} requested.`,
+        error: `Not enough Annual Leave balance — ${entitlement - used} day(s) remaining for ${year}, ${requested} requested.`,
       });
       return;
     }
@@ -781,6 +793,27 @@ function requestDate(d: Record<string, unknown>): string {
   if (d.type === "OT") return (detail.ot_date as string) ?? "";
   return ((detail.departure_at as string) ?? "").slice(0, 10);
 }
+
+// Self-service "how many Annual Leave days do I have left" — lets the
+// Submit form show this before the employee commits to submitting (see
+// ALRequestForm), using the exact same entitlement/used math as the
+// server-side balance check in POST /:id/submit, so the two can never
+// disagree about whether a request will fit.
+requestsRouter.get("/al-balance", (req, res) => {
+  const me = myEmployeeRow(req.user!);
+  if (!me) {
+    res.status(400).json({ error: "No employee record is linked to your account yet." });
+    return;
+  }
+  const year = req.query.year != null && req.query.year !== "" ? Number(req.query.year) : new Date().getFullYear();
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    res.status(400).json({ error: "year must be a 4-digit year." });
+    return;
+  }
+  const entitlement = computeAlEntitlementDays(me.commencement_date);
+  const used = alDaysUsed(me.id, year);
+  res.json({ year, entitlement, used, remaining: entitlement - used });
+});
 
 // Company-wide (well, "everyone this viewer is allowed to see") view of
 // approved absences for one calendar month — powers the Employee
@@ -909,13 +942,13 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     scope.ids === null
       ? db
           .prepare(
-            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, annual_leave_entitlement_days
+            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, commencement_date
              FROM employees WHERE is_archived = 0`,
           )
           .all()
       : db
           .prepare(
-            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, annual_leave_entitlement_days
+            `SELECT id, employee_code, last_name, middle_name, first_name, english_name, department, commencement_date
              FROM employees WHERE is_archived = 0 AND id IN (${[...scope.ids].map(() => "?").join(",") || "NULL"})`,
           )
           .all(...scope.ids)
@@ -927,7 +960,7 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     first_name: string;
     english_name: string | null;
     department: string | null;
-    annual_leave_entitlement_days: number;
+    commencement_date: string | null;
   }[];
 
   const alRows = db
@@ -972,7 +1005,7 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
     },
     department: e.department,
     al_used: alTotals.get(e.id) ?? 0,
-    al_entitlement: e.annual_leave_entitlement_days,
+    al_entitlement: computeAlEntitlementDays(e.commencement_date),
     // Rounded to 1 decimal for display — total_hours is already rounded
     // to 2 decimals per OT entry (calcOtHours), but summing several can
     // still land on an ugly float (e.g. floating-point 7.550000000000001).

@@ -6,6 +6,7 @@ import { logAudit, diffAndLog } from "../audit.js";
 import { stripDiacritics } from "../employeeName.js";
 import { CAREER_RANK_LABELS } from "../types.js";
 import type { PublicUser } from "../types.js";
+import { computeAlEntitlementDays } from "../alEntitlement.js";
 
 export const employeesRouter = Router();
 
@@ -191,16 +192,7 @@ interface EmployeeInput {
   career_map_role_id?: string | null;
   report_to_employee_id?: string | null;
   is_offshore?: boolean;
-  annual_leave_entitlement_days?: number;
   [key: string]: string | boolean | number | null | undefined;
-}
-
-// Falls back to the schema default (12) for anything not a positive-or-zero
-// finite number — matches how a fresh employee row gets it for free via the
-// column's own DEFAULT, rather than letting a bad/missing value corrupt it.
-function resolveEntitlementDays(raw: unknown): number {
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : 12;
 }
 
 function validate(input: EmployeeInput): string | null {
@@ -330,6 +322,10 @@ function loadDetail(id: string) {
     is_offshore: Boolean(row.is_offshore),
     career_map_role: careerMapRole ? { ...careerMapRole, is_archived: Boolean(careerMapRole.is_archived) } : null,
     report_to_employee: reportToEmployee ?? null,
+    // Computed from commencement_date, not a stored column — see
+    // alEntitlement.ts. Kept under the same field name the old manual
+    // column used so nothing downstream needs to change.
+    annual_leave_entitlement_days: computeAlEntitlementDays(row.commencement_date as string | null),
   };
 }
 
@@ -706,11 +702,13 @@ employeesRouter.patch("/:id", requireCap("employee.edit"), (req, res) => {
     return;
   }
   const values = fieldValues(FIELDS, input, roleDerivedFields(careerMapRoleId));
-  const entitlementDays = resolveEntitlementDays(input.annual_leave_entitlement_days);
   db.prepare(
-    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, is_offshore = ?, annual_leave_entitlement_days = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, entitlementDays, req.user!.id, req.params.id);
+    `UPDATE employees SET ${FIELDS.map((f) => `${f} = ?`).join(", ")}, career_map_role_id = ?, report_to_employee_id = ?, is_offshore = ?, updated_by = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).run(...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, req.user!.id, req.params.id);
   const updated = loadDetail(req.params.id)!;
+  // annual_leave_entitlement_days is computed (see alEntitlement.ts), not
+  // settable here — but still included in the diff so a commencement_date
+  // correction that changes it shows up as a real, logged consequence.
   diffAndLog(
     "employee",
     req.params.id,
