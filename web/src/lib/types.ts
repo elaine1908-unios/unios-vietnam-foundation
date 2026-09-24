@@ -500,6 +500,7 @@ export interface RequestRecord {
     can_edit: boolean;
     can_submit: boolean;
     can_cancel: boolean;
+    can_delete: boolean;
     can_decide: boolean;
     can_decide_cancellation: boolean;
   };

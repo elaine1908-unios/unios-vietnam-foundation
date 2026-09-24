@@ -208,6 +208,23 @@ export function RequestDetailPage() {
     }
   }
 
+  async function deleteRequest() {
+    if (!window.confirm("Delete this request? This can't be undone.")) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      await api.delete(`/requests/${id}`);
+      queryClient.removeQueries({ queryKey: ["requests", id] });
+      await queryClient.invalidateQueries({ queryKey: ["requests", "mine"] });
+      await queryClient.invalidateQueries({ queryKey: ["requests", "approvals"] });
+      await queryClient.invalidateQueries({ queryKey: ["requests", "manage"] });
+      navigate("/requests/mine");
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
   async function decideCancellation(confirm: boolean) {
     setBusy(true);
     setActionError(null);
@@ -316,6 +333,16 @@ export function RequestDetailPage() {
             {r.viewer.can_cancel && r.status !== "approved" && (
               <button className="rounded-md border border-red-300 text-red-600 px-3 py-2 text-sm hover:bg-red-50" disabled={busy} onClick={cancel} type="button">
                 Cancel Request
+              </button>
+            )}
+            {r.viewer.can_delete && (
+              <button
+                className="rounded-md border border-red-300 text-red-600 px-3 py-2 text-sm hover:bg-red-50"
+                disabled={busy}
+                onClick={deleteRequest}
+                type="button"
+              >
+                Delete
               </button>
             )}
           </div>

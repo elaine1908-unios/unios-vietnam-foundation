@@ -23,6 +23,12 @@ type RequestStatus =
   | "cancelled";
 
 const REQUEST_TYPES: RequestType[] = ["AL", "OT", "BT"];
+// Statuses a non-admin owner can hard-delete their own request from — see
+// DELETE /:id and loadDetail's viewer.can_delete below. Anything in flight
+// (pending_approval) or already effective (approved/cancellation_requested)
+// has to go through Cancel/Request Cancellation instead, which preserves a
+// record; admin/BOD bypass this list entirely.
+const SELF_DELETABLE_STATUSES: RequestStatus[] = ["draft", "needs_changes", "rejected", "cancelled"];
 const LEAVE_TYPES = ["Annual Leave", "Marriage Leave - Self", "Bereavement Leave - Family", "Other Unpaid Leave"];
 const LEAVE_DURATIONS = ["Morning", "Afternoon", "Full Day"];
 const OT_LOCATIONS = ["Office", "Site", "Remote", "Other"];
@@ -243,6 +249,7 @@ function loadDetail(
       can_edit: isOwner && (status === "draft" || status === "needs_changes"),
       can_submit: isOwner && (status === "draft" || status === "needs_changes"),
       can_cancel: isOwner && status !== "cancelled" && status !== "rejected" && status !== "cancellation_requested",
+      can_delete: Boolean(viewerIsAdmin) || (isOwner && SELF_DELETABLE_STATUSES.includes(status)),
       can_decide: (isApprover || viewerIsAdmin) && status === "pending_approval",
       can_decide_cancellation: (isApprover || viewerIsAdmin) && status === "cancellation_requested",
     },
@@ -1159,6 +1166,45 @@ requestsRouter.post("/:id/cancel", (req, res) => {
     return;
   }
   res.status(400).json({ error: "This request can't be cancelled from its current status." });
+});
+
+// A genuine hard delete — unlike /cancel above (which only flips status and
+// keeps the row for history), this removes it entirely. al_details/
+// ot_details/bt_details cascade automatically (ON DELETE CASCADE — see
+// migrations/0023_al_ot_bt_requests.sql), and its audit_log rows are
+// deliberately left in place afterward — same precedent as the employees
+// hard-delete in routes/employees.ts (no FK ties audit_log to the now-gone
+// row, and the audit trail itself isn't what's being reset here).
+//
+// Self can only delete their own request while it hasn't taken effect and
+// isn't actively awaiting someone else's decision — an in-flight
+// (pending_approval) or already-approved/cancellation_requested request
+// should go through Cancel/Request Cancellation instead, which preserves a
+// record of what happened. Admin/BOD have no such restriction — full
+// oversight, any status, same unconditional bypass isAdminOversight grants
+// everywhere else in this file.
+requestsRouter.delete("/:id", (req, res) => {
+  const me = myEmployeeRow(req.user!);
+  const admin = isAdminOversight(req.user!);
+  const existing = db.prepare("SELECT * FROM requests WHERE id = ?").get(req.params.id) as
+    | { id: string; employee_id: string; status: RequestStatus }
+    | undefined;
+  if (!existing) {
+    res.status(404).json({ error: "Request not found." });
+    return;
+  }
+  const isOwner = me != null && existing.employee_id === me.id;
+  if (!admin && !isOwner) {
+    res.status(404).json({ error: "Request not found." });
+    return;
+  }
+  if (!admin && !SELF_DELETABLE_STATUSES.includes(existing.status)) {
+    res.status(400).json({ error: "This request can't be deleted from its current status — cancel it first." });
+    return;
+  }
+  logAudit("request", existing.id, "deleted", req.user!.id, "status", existing.status, null);
+  db.prepare("DELETE FROM requests WHERE id = ?").run(existing.id);
+  res.json({ deleted: true });
 });
 
 requestsRouter.post("/:id/decide-cancellation", (req, res) => {
