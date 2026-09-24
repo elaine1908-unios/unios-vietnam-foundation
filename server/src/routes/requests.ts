@@ -1144,6 +1144,72 @@ requestsRouter.get("/manage", requireCap("request.manageAll"), (req, res) => {
   res.json({ year, month: monthParam, summary, requests });
 });
 
+// Admin/BOD-only, login-time reminder: any active Business Trip that needs
+// transportation and/or a hotel arranged, that this specific admin hasn't
+// already dismissed (see bt_reminder_acks — per-user, not global, so a
+// second admin still gets prompted if the first one is out). Scoped to
+// requests that are actually still going to happen: not draft/rejected/
+// needs_changes/cancelled (nothing to arrange for those), and not already
+// returned (date(return_at) < today — no point nagging about a trip
+// that's over). AppLayout.tsx calls this once per session and shows a
+// dismissible popup for whatever comes back.
+requestsRouter.get("/bt-reminders", (req, res) => {
+  if (!isAdminOversight(req.user!)) {
+    res.json([]);
+    return;
+  }
+  const rows = db
+    .prepare(
+      `SELECT r.id, r.request_code, r.employee_id, d.destination, d.departure_at, d.return_at,
+              d.transportation_required, d.hotel_required
+       FROM requests r JOIN bt_details d ON d.request_id = r.id
+       WHERE r.status IN ('pending_approval', 'approved', 'cancellation_requested')
+         AND (d.transportation_required = 1 OR d.hotel_required = 1)
+         AND date(d.return_at) >= date('now')
+         AND r.id NOT IN (SELECT request_id FROM bt_reminder_acks WHERE user_id = ?)
+       ORDER BY d.departure_at ASC`,
+    )
+    .all(req.user!.id) as {
+    id: string;
+    request_code: string | null;
+    employee_id: string;
+    destination: string;
+    departure_at: string;
+    return_at: string;
+    transportation_required: number;
+    hotel_required: number;
+  }[];
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      request_code: r.request_code,
+      employee: employeeRef(r.employee_id),
+      destination: r.destination,
+      departure_at: r.departure_at,
+      return_at: r.return_at,
+      transportation_required: Boolean(r.transportation_required),
+      hotel_required: Boolean(r.hotel_required),
+    })),
+  );
+});
+
+requestsRouter.post("/bt-reminders/ack", (req, res) => {
+  if (!isAdminOversight(req.user!)) {
+    res.status(403).json({ error: "Not allowed." });
+    return;
+  }
+  const { request_ids } = req.body as { request_ids?: string[] };
+  if (!Array.isArray(request_ids) || request_ids.length === 0) {
+    res.status(400).json({ error: "request_ids must be a non-empty array." });
+    return;
+  }
+  const stmt = db.prepare("INSERT OR IGNORE INTO bt_reminder_acks (request_id, user_id) VALUES (?, ?)");
+  transaction(() => {
+    for (const id of request_ids) stmt.run(id, req.user!.id);
+  })();
+  res.json({ ok: true });
+});
+
 requestsRouter.get("/approvals", (req, res) => {
   const me = myEmployeeRow(req.user!);
   const admin = isAdminOversight(req.user!);

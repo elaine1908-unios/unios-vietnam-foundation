@@ -534,6 +534,19 @@ export interface MyRequestsSummary {
   bt_days: number;
 }
 
+// One-time admin/BOD login reminder for a Business Trip that still needs
+// transportation and/or a hotel arranged — see GET /requests/bt-reminders.
+export interface BtReminder {
+  id: string;
+  request_code: string | null;
+  employee: RequestEmployeeRef | null;
+  destination: string;
+  departure_at: string;
+  return_at: string;
+  transportation_required: boolean;
+  hotel_required: boolean;
+}
+
 export interface ImportRowError {
   row: number;
   error: string;

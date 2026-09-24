@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthProvider";
 import { UniosLogo } from "../components/UniosLogo";
 import { api } from "../lib/api";
 import { ACCESS_LEVEL_LABELS } from "../lib/types";
-import type { RequestRecord } from "../lib/types";
+import type { BtReminder, RequestRecord } from "../lib/types";
+import { employeeDisplayName } from "../lib/vietnamese";
 import {
   ArrowRightIcon,
   BriefcaseIcon,
@@ -31,9 +32,50 @@ const headerBtnClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? "border-accent bg-accent-soft text-accent font-medium" : "border-border text-ink-muted hover:text-ink hover:bg-surface-2"
   }`;
 
+// One-time, dismissible reminder for admin/BOD: any active Business Trip
+// still needing transportation and/or a hotel arranged that this admin
+// hasn't already dismissed (see GET /requests/bt-reminders). "Once" means
+// per-admin, not global — dismissing here acknowledges every trip shown at
+// the moment of dismissal, not future ones that start needing arrangement
+// later.
+function BtReminderModal({ reminders, onDismiss, dismissing }: { reminders: BtReminder[]; onDismiss: () => void; dismissing: boolean }) {
+  return (
+    <div className="fixed inset-0 bg-ink/50 flex items-center justify-center p-4 z-50">
+      <div className="card max-w-lg w-full flex flex-col gap-3">
+        <h2 className="font-display font-semibold text-lg">Business Trips needing arrangement</h2>
+        <p className="text-sm text-ink-muted">
+          These upcoming trips still need transportation and/or a hotel arranged:
+        </p>
+        <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+          {reminders.map((r) => (
+            <div key={r.id} className="border border-border rounded-md p-2 text-sm">
+              <div className="font-medium">
+                {r.employee ? employeeDisplayName(r.employee) : "—"} — {r.destination}
+              </div>
+              <div className="text-ink-muted text-xs">
+                {r.departure_at.slice(0, 10)} → {r.return_at.slice(0, 10)}
+              </div>
+              <div className="flex gap-2 mt-1">
+                {r.transportation_required && (
+                  <span className="text-xs rounded bg-accent-soft text-accent px-1.5 py-0.5">Transportation</span>
+                )}
+                {r.hotel_required && <span className="text-xs rounded bg-accent-soft text-accent px-1.5 py-0.5">Hotel</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="btn-primary self-end" type="button" disabled={dismissing} onClick={onDismiss}>
+          {dismissing ? "Dismissing…" : "Got it"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AppLayout() {
   const { user, signOut } = useAuth();
   const { pathname } = useLocation();
+  const queryClient = useQueryClient();
   const canAdminUsers = user?.capabilities.includes("user.admin") ?? false;
   const canViewEmployees = user?.capabilities.includes("employee.view") ?? false;
   const canManageRequests = user?.capabilities.includes("request.manageAll") ?? false;
@@ -93,8 +135,38 @@ export function AppLayout() {
   });
   const pendingApprovalCount = approvals?.length ?? 0;
 
+  // Login-time popup for admin/BOD — see BtReminderModal above and
+  // GET /requests/bt-reminders. The server already returns [] for a
+  // non-admin, but gating the query on isAdmin too avoids firing it for
+  // every signed-in user regardless of role.
+  const isAdmin = user?.access_level === "admin" || user?.access_level === "owner";
+  const { data: btReminders } = useQuery({
+    queryKey: ["requests", "bt-reminders"],
+    queryFn: () => api.get<BtReminder[]>("/requests/bt-reminders"),
+    enabled: isAdmin,
+  });
+  const [dismissing, setDismissing] = useState(false);
+  // Reminders are only ever cleared by dismissing (see handleDismissReminders)
+  // or a fresh fetch returning fewer of them — never by this state going
+  // stale, so an empty array here reliably means "nothing to show," not
+  // "haven't loaded yet" (that's what `btReminders == null` means instead).
+  async function handleDismissReminders() {
+    if (!btReminders || btReminders.length === 0) return;
+    setDismissing(true);
+    try {
+      await api.post("/requests/bt-reminders/ack", { request_ids: btReminders.map((r) => r.id) });
+      await queryClient.invalidateQueries({ queryKey: ["requests", "bt-reminders"] });
+    } finally {
+      setDismissing(false);
+    }
+  }
+
   return (
-    <div className="min-h-screen flex">
+    <>
+      {isAdmin && btReminders && btReminders.length > 0 && (
+        <BtReminderModal reminders={btReminders} onDismiss={handleDismissReminders} dismissing={dismissing} />
+      )}
+      <div className="min-h-screen flex">
       <aside className="w-60 shrink-0 border-r border-border px-5 py-7 hidden sm:flex sm:flex-col">
         <div>
           <UniosLogo className="h-8 text-accent-2 mb-[3px]" />
@@ -249,6 +321,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-    </div>
+      </div> {/* /min-h-screen flex */}
+    </>
   );
 }
