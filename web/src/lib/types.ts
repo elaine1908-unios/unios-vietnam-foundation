@@ -524,6 +524,16 @@ export interface RequestManageResponse {
   requests: RequestRecord[];
 }
 
+// Self-service, single-year version of RequestManageSummaryEntry above —
+// see GET /requests/summary.
+export interface MyRequestsSummary {
+  year: number;
+  al: { used: number; entitlement: number; remaining: number };
+  ot_hours: number;
+  bt_trips: number;
+  bt_days: number;
+}
+
 export interface ImportRowError {
   row: number;
   error: string;

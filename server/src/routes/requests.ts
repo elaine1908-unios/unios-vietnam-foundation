@@ -935,6 +935,58 @@ requestsRouter.get("/dashboard", (req, res) => {
   res.json({ leave, bt, ot });
 });
 
+// Self-service summary shown at the top of My Requests — total AL days
+// used/entitlement, total OT hours, and total BT trips/days for the given
+// calendar year. Same 'approved'/'cancellation_requested' "actually
+// committed" filter as alDaysUsed and GET /manage's per-employee summary
+// below (which this is essentially a self-only, single-row version of),
+// and reuses alDaysUsed/computeAlEntitlementDays so the AL figures here
+// can never disagree with the balance check on submit or the al-balance
+// endpoint the confirm-submit popup uses.
+requestsRouter.get("/summary", (req, res) => {
+  const me = myEmployeeRow(req.user!);
+  if (!me) {
+    res.status(400).json({ error: "No employee record is linked to your account yet." });
+    return;
+  }
+  const year = req.query.year != null && req.query.year !== "" ? Number(req.query.year) : new Date().getFullYear();
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    res.status(400).json({ error: "year must be a 4-digit year." });
+    return;
+  }
+  const yearStr = String(year);
+
+  const alUsed = alDaysUsed(me.id, year);
+  const entitlement = computeAlEntitlementDays(me.commencement_date);
+
+  const otHours = (
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(d.total_hours), 0) as total FROM requests r JOIN ot_details d ON d.request_id = r.id
+         WHERE r.employee_id = ? AND r.status IN ${DASHBOARD_STATUSES} AND substr(d.ot_date, 1, 4) = ?`,
+      )
+      .get(me.id, yearStr) as { total: number }
+  ).total;
+
+  const btRows = db
+    .prepare(
+      `SELECT d.days_requested FROM requests r JOIN bt_details d ON d.request_id = r.id
+       WHERE r.employee_id = ? AND r.status IN ${DASHBOARD_STATUSES} AND substr(d.departure_at, 1, 4) = ?`,
+    )
+    .all(me.id, yearStr) as { days_requested: number }[];
+
+  res.json({
+    year,
+    al: { used: alUsed, entitlement, remaining: entitlement - alUsed },
+    // Rounded to 1 decimal, same reasoning as GET /manage's ot_hours —
+    // summing several already-rounded per-entry hour figures can still
+    // land on an ugly float.
+    ot_hours: Math.round(otHours * 10) / 10,
+    bt_trips: btRows.length,
+    bt_days: btRows.reduce((sum, r) => sum + r.days_requested, 0),
+  });
+});
+
 // "Manage AL, OT & BT" — the oversight page for Head of Department/BOD/
 // Admin. Scoped exactly like Employee Master (employeeScopeFor): a Head of
 // Department sees their full reporting chain, Admin/BOD see everyone. Two

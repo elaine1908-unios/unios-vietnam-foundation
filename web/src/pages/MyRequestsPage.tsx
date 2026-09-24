@@ -2,12 +2,24 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import type { RequestRecord, RequestStatus, RequestType } from "../lib/types";
+import type { MyRequestsSummary, RequestRecord, RequestStatus, RequestType } from "../lib/types";
 import { REQUEST_STATUS_LABELS, REQUEST_TYPE_LABELS } from "../lib/types";
 import { requestPeriod, requestSummary, StatusBadge } from "../lib/requestDisplay";
 import { employeeDisplayName } from "../lib/vietnamese";
 
 const TYPES: RequestType[] = ["AL", "OT", "BT"];
+
+// Same visual language as the Employee Dashboard's stat cards, just with a
+// composite value ("3 / 12 days") instead of a single number — see
+// EmployeeDashboardPage.tsx's own Card for the plain-number version.
+function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="card !p-4">
+      <div className="text-2xl font-display font-bold text-ink">{value}</div>
+      <div className="text-sm text-ink-muted">{label}</div>
+    </div>
+  );
+}
 
 export function MyRequestsPage() {
   const [typeFilter, setTypeFilter] = useState<RequestType | "">("");
@@ -16,6 +28,11 @@ export function MyRequestsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["requests", "mine"],
     queryFn: () => api.get<RequestRecord[]>("/requests"),
+  });
+
+  const { data: summary } = useQuery({
+    queryKey: ["requests", "summary"],
+    queryFn: () => api.get<MyRequestsSummary>("/requests/summary"),
   });
 
   const rows = useMemo(() => {
@@ -29,6 +46,20 @@ export function MyRequestsPage() {
     <div className="max-w-5xl">
       <h1 className="font-display font-bold text-xl mb-1">My Requests</h1>
       <p className="text-sm text-ink-muted mb-4">Every Annual Leave, Overtime, and Business Trip request you've submitted.</p>
+
+      {summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <SummaryCard
+            label={`AL Days Used / Entitlement (${summary.year})`}
+            value={`${summary.al.used} / ${summary.al.entitlement}`}
+          />
+          <SummaryCard label={`OT Hours (${summary.year})`} value={`${summary.ot_hours.toFixed(1)}h`} />
+          <SummaryCard
+            label={`Business Trips (${summary.year})`}
+            value={`${summary.bt_trips} trip${summary.bt_trips === 1 ? "" : "s"} · ${summary.bt_days} day${summary.bt_days === 1 ? "" : "s"}`}
+          />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <select className="input !w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as RequestType | "")}>
