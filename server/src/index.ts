@@ -72,5 +72,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 const port = Number(process.env.PORT) || 4000;
 app.listen(port, () => {
-  console.log(`Performance Profiles server listening on http://localhost:${port}`);
+  console.log(`Unios Foundation server listening on http://localhost:${port}`);
 });

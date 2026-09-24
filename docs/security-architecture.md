@@ -1,10 +1,10 @@
 # User Security & Management Architecture
 
-This documents how Performance Profiles (a.k.a. Careers and Foundation)
-handles identity, authentication, authorization, and account
-administration, as actually implemented in the code today. It's scoped to
-the user/security surface only — see [`README.md`](../README.md) for the
-rest of the app.
+This documents how Unios Foundation (formerly Performance Profiles; a.k.a.
+Careers and Foundation) handles identity, authentication, authorization,
+and account administration, as actually implemented in the code today.
+It's scoped to the user/security surface only — see
+[`README.md`](../README.md) for the rest of the app.
 
 All server-side enforcement described here lives under `server/src/` and
 is what the code actually checks on every request. The client (`web/src/`)

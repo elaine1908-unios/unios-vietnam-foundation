@@ -13,7 +13,7 @@ export const twoFactorRouter = Router();
 // already be signed in as yourself to touch this).
 twoFactorRouter.use(requireAuth);
 
-const ISSUER = "Performance Profiles";
+const ISSUER = "Unios Foundation";
 // ±1 time-step (30s each way) tolerance for clock drift between the
 // server and the user's phone — same margin most authenticator-app
 // integrations use.
