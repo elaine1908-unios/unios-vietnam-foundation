@@ -75,9 +75,11 @@ usersRouter.post("/", (req, res) => {
   const finalLevel: AccessLevel = isAccessLevel(access_level) ? access_level : "team_member";
   const id = newId();
   // must_change_password = 1: this account's password was chosen by
-  // whoever is creating it, not by the person who'll use it.
+  // whoever is creating it, not by the person who'll use it. must_setup_2fa
+  // = 1 for the same reason a brand-new account always needs it — see
+  // force2faSetupGate.ts.
   db.prepare(
-    "INSERT INTO users (id, name, email, access_level, password_hash, must_change_password) VALUES (?, ?, ?, ?, ?, 1)",
+    "INSERT INTO users (id, name, email, access_level, password_hash, must_change_password, must_setup_2fa) VALUES (?, ?, ?, ?, ?, 1, 1)",
   ).run(id, name, normalizedEmail, finalLevel, hashPassword(password));
   logAudit("user", id, "created", req.user!.id, "access_level", null, finalLevel);
   res.status(201).json(toPublicUser(db.prepare("SELECT * FROM users WHERE id = ?").get(id) as unknown as UserRow));
@@ -193,7 +195,13 @@ usersRouter.post("/:id/reset-password", (req, res) => {
     res.status(403).json({ error: "Only a BOD member can reset another BOD member's password." });
     return;
   }
-  db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?").run(
+  // must_setup_2fa = 1 too — a password reset is exactly the other trigger
+  // (besides brand-new accounts) that requires setting up 2FA again on next
+  // login (see force2faSetupGate.ts). Harmless to set even if the target
+  // already has 2FA enabled — both the gate and RequireAuth check
+  // must_setup_2fa alongside has_2fa, so an account that already has 2FA is
+  // never actually stopped by this.
+  db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1, must_setup_2fa = 1 WHERE id = ?").run(
     hashPassword(password),
     target.id,
   );

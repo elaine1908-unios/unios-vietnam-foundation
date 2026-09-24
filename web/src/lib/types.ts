@@ -77,6 +77,10 @@ export interface User {
   is_active: boolean;
   must_change_password: boolean;
   has_2fa: boolean;
+  // True when this account still owes a mandatory 2FA setup (new account,
+  // an admin-reset password, or the one-time rollout) — see RequireAuth.tsx,
+  // which gates on this alongside has_2fa.
+  must_setup_2fa: boolean;
   created_at: string;
   // Effective capability list for this user's access_level, computed
   // server-side (see toPublicUser in server/src/types.ts) — drives

@@ -49,7 +49,9 @@ twoFactorRouter.post("/confirm", async (req, res) => {
     res.status(400).json({ error: "That code doesn't match. Check the time on your device and try again." });
     return;
   }
-  db.prepare("UPDATE users SET totp_enabled = 1, totp_enabled_at = datetime('now') WHERE id = ?").run(req.user!.id);
+  db.prepare(
+    "UPDATE users SET totp_enabled = 1, totp_enabled_at = datetime('now'), must_setup_2fa = 0 WHERE id = ?",
+  ).run(req.user!.id);
   logAudit("user", req.user!.id, "updated", req.user!.id, "totp_enabled", "false", "true");
   res.json({ ok: true });
 });

@@ -29,6 +29,7 @@ export interface UserRow {
   totp_secret: string | null;
   totp_enabled: number;
   totp_enabled_at: string | null;
+  must_setup_2fa: number;
   created_at: string;
 }
 
@@ -40,6 +41,13 @@ export interface PublicUser {
   is_active: boolean;
   must_change_password: boolean;
   has_2fa: boolean;
+  // True when this account must set up 2FA before it can do anything else
+  // (new account, an admin-reset password, or the one-time company-wide
+  // rollout — see migrations/0028_force_2fa_setup.sql) and hasn't yet.
+  // Ignored once has_2fa is true even if the column itself is still 1 —
+  // see force2faSetupGate.ts and RequireAuth.tsx, both of which gate on
+  // `must_setup_2fa && !has_2fa` rather than the raw column.
+  must_setup_2fa: boolean;
   created_at: string;
   // The effective capability list for this user's access_level — computed
   // here, once, server-side. The client drives navigation off this instead
@@ -86,6 +94,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     is_active: Boolean(row.is_active),
     must_change_password: Boolean(row.must_change_password),
     has_2fa: Boolean(row.totp_enabled),
+    must_setup_2fa: Boolean(row.must_setup_2fa),
     created_at: row.created_at,
     capabilities: capabilitiesFor(row.access_level),
   };

@@ -20,6 +20,7 @@ import { codeOfConductRouter } from "./routes/codeOfConduct.js";
 import { twoFactorRouter } from "./routes/twoFactor.js";
 import { attachUser } from "./middleware.js";
 import { forcePasswordChangeGate } from "./forcePasswordChangeGate.js";
+import { force2faSetupGate } from "./force2faSetupGate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -32,9 +33,15 @@ app.use(cookieParser());
 // itself sits before the forced-password-change gate, so all of
 // /api/auth/* — sign-in, "read my profile", "set my password" — stays
 // reachable no matter what; every router mounted after the gate does not.
+// /api/2fa sits between the two forced-setup gates for the same reason:
+// it must stay reachable while must_setup_2fa is true (that's the whole
+// point — you need /2fa/setup and /2fa/confirm to get past the gate), but
+// still requires a real password to already be set first.
 app.use(attachUser);
 app.use("/api/auth", authRouter);
 app.use(forcePasswordChangeGate);
+app.use("/api/2fa", twoFactorRouter);
+app.use(force2faSetupGate);
 app.use("/api/users", usersRouter);
 app.use("/api/profiles", profilesRouter);
 app.use("/api/profiles", pdfRouter);
@@ -45,7 +52,6 @@ app.use("/api/audit-log", auditRouter);
 app.use("/api/employees", employeesRouter);
 app.use("/api/requests", requestsRouter);
 app.use("/api/code-of-conduct", codeOfConductRouter);
-app.use("/api/2fa", twoFactorRouter);
 app.use("/api/public", publicRouter);
 
 // Production: serve the built frontend from the same process/port, so the
