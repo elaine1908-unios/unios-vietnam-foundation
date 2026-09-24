@@ -4,6 +4,7 @@ import { db } from "../db.js";
 import { newId } from "../ids.js";
 import { requireAuth, requireCap } from "../middleware.js";
 import { diffAndLog, logAudit } from "../audit.js";
+import { resolvedChangedByName } from "../types.js";
 
 export const codeOfConductRouter = Router();
 
@@ -39,12 +40,21 @@ codeOfConductRouter.get("/", (_req, res) => {
 codeOfConductRouter.get("/version-history", (_req, res) => {
   const rows = db
     .prepare(
-      `SELECT h.id, h.version, h.version_date, h.section_title, h.changed_at, u.name as changed_by_name
+      `SELECT h.id, h.version, h.version_date, h.section_title, h.changed_at, u.name as changed_by_name,
+              u.email as changed_by_email
        FROM code_of_conduct_version_history h LEFT JOIN users u ON u.id = h.changed_by
        ORDER BY h.changed_at DESC`,
     )
-    .all();
-  res.json(rows);
+    .all() as {
+    id: string;
+    version: string;
+    version_date: string;
+    section_title: string | null;
+    changed_at: string;
+    changed_by_name: string | null;
+    changed_by_email: string | null;
+  }[];
+  res.json(rows.map(resolvedChangedByName));
 });
 
 codeOfConductRouter.get("/sections/:id", (req, res) => {

@@ -54,13 +54,27 @@ export interface PublicUser {
 // it drifted until someone remembered to click "Sync names". Falls back to
 // the stored `users.name` only for an account with no matching employee row
 // (predates Employee Master, or the email was never onboarded there).
-function computedNameFor(email: string): string | null {
+export function computedNameFor(email: string): string | null {
   const employee = db
     .prepare("SELECT english_name, first_name, middle_name, last_name FROM employees WHERE LOWER(work_email) = ?")
     .get(email.toLowerCase()) as
     | { english_name: string | null; first_name: string; middle_name: string | null; last_name: string }
     | undefined;
   return employee ? employeeDisplayName(employee) : null;
+}
+
+// Same "linked Employee Master name wins" rule as a user's own display name
+// above, applied to "who did this" attribution in every audit trail (Job
+// Profile history, Code of Conduct version history, AL/OT/BT Approval
+// History, the company-wide Audit Log) instead of just account info.
+// Callers select `changed_by_name`/`changed_by_email` from `users` via a
+// LEFT JOIN (changed_by can be null for a system action, hence the guard)
+// and map each row through this afterward.
+export function resolvedChangedByName<T extends { changed_by_name: string | null; changed_by_email?: string | null }>(
+  row: T,
+): T {
+  if (!row.changed_by_email) return row;
+  return { ...row, changed_by_name: computedNameFor(row.changed_by_email) ?? row.changed_by_name };
 }
 
 export function toPublicUser(row: UserRow): PublicUser {

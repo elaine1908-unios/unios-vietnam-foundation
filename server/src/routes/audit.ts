@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth, requireCap } from "../middleware.js";
+import { resolvedChangedByName } from "../types.js";
 
 export const auditRouter = Router();
 
@@ -23,6 +24,17 @@ auditRouter.get("/", (req, res) => {
        ORDER BY audit_log.changed_at DESC
        LIMIT 500`,
     )
-    .all(...(entityType ? [entityType] : []));
-  res.json(rows);
+    .all(...(entityType ? [entityType] : [])) as {
+    id: string;
+    entity_type: string;
+    entity_id: string;
+    action: string;
+    field_name: string | null;
+    old_value: string | null;
+    new_value: string | null;
+    changed_at: string;
+    changed_by_name: string | null;
+    changed_by_email: string | null;
+  }[];
+  res.json(rows.map(resolvedChangedByName));
 });

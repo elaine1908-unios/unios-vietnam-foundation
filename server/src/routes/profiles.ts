@@ -5,6 +5,7 @@ import { requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
 import { getOrCreateTranslation } from "../translation.js";
 import type { ProfileForTranslation } from "../translation.js";
+import { resolvedChangedByName } from "../types.js";
 
 export const profilesRouter = Router();
 
@@ -321,8 +322,17 @@ profilesRouter.get("/:id/audit-log", (req, res) => {
        WHERE audit_log.entity_type = 'job_profile' AND audit_log.entity_id = ?
        ORDER BY audit_log.changed_at DESC`,
     )
-    .all(req.params.id);
-  res.json(rows);
+    .all(req.params.id) as {
+    id: string;
+    action: string;
+    field_name: string | null;
+    old_value: string | null;
+    new_value: string | null;
+    changed_at: string;
+    changed_by_name: string | null;
+    changed_by_email: string | null;
+  }[];
+  res.json(rows.map(resolvedChangedByName));
 });
 
 interface TranslationRow {
