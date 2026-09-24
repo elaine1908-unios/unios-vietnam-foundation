@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
@@ -241,9 +241,26 @@ export function EmployeeDashboardPage() {
     queryFn: () => api.get<EmployeeSummary[]>("/employees?includeArchived=true"),
   });
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  // Drives the On Leave / Business Travel calendars and the Overtime
+  // breakdown below — navigable via the Prev/Next controls next to the
+  // calendars, unlike the Milestone cards further up (Contracts/Birthdays/
+  // Anniversaries), which are deliberately always "this month" and use
+  // their own separate `monthName` (see below) rather than this cursor.
+  const [cursor, setCursor] = useState(() => {
+    const n = new Date();
+    return { year: n.getFullYear(), month: n.getMonth() };
+  });
+  const { year, month } = cursor;
+  function shiftMonth(delta: number) {
+    setCursor(({ year, month }) => {
+      const d = new Date(year, month + delta, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+  }
+  const isCurrentCalendarMonth = (() => {
+    const n = new Date();
+    return year === n.getFullYear() && month === n.getMonth();
+  })();
   const monthParam = `${year}-${String(month + 1).padStart(2, "0")}`;
   const { data: requestsDashboard } = useQuery({
     queryKey: ["requests", "dashboard", monthParam],
@@ -387,6 +404,7 @@ export function EmployeeDashboardPage() {
   if (error) return <p className="text-sm text-red-600">Couldn't load employee data.</p>;
 
   const monthName = MONTH_NAMES[new Date().getMonth()];
+  const cursorMonthLabel = `${MONTH_NAMES[month]} ${year}`;
 
   return (
     <div className="max-w-7xl">
@@ -431,10 +449,32 @@ export function EmployeeDashboardPage() {
         />
       </div>
 
+      <div className="flex items-center gap-3 mb-3">
+        <button className="btn-secondary !px-2 !py-1 text-sm" type="button" onClick={() => shiftMonth(-1)}>
+          ‹ Prev
+        </button>
+        <span className="font-display font-semibold text-sm w-24 text-center">{cursorMonthLabel}</span>
+        <button className="btn-secondary !px-2 !py-1 text-sm" type="button" onClick={() => shiftMonth(1)}>
+          Next ›
+        </button>
+        {!isCurrentCalendarMonth && (
+          <button
+            className="text-sm text-accent hover:underline"
+            type="button"
+            onClick={() => {
+              const n = new Date();
+              setCursor({ year: n.getFullYear(), month: n.getMonth() });
+            }}
+          >
+            Back to this month
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <CalendarCard
-          title={`On Leave — ${monthName}`}
-          emptyText="No approved leave this month."
+          title={`On Leave — ${cursorMonthLabel}`}
+          emptyText={`No approved leave in ${cursorMonthLabel}.`}
           year={year}
           month={month}
           eventsByDay={calendars.leaveByDay}
@@ -442,8 +482,8 @@ export function EmployeeDashboardPage() {
           hasAnyEvents={calendars.leaveByDay.size > 0}
         />
         <CalendarCard
-          title={`Business Travel — ${monthName}`}
-          emptyText="No approved business travel this month."
+          title={`Business Travel — ${cursorMonthLabel}`}
+          emptyText={`No approved business travel in ${cursorMonthLabel}.`}
           year={year}
           month={month}
           eventsByDay={calendars.btByDay}
@@ -462,7 +502,7 @@ export function EmployeeDashboardPage() {
         <BreakdownCard title="By Office Location" counts={stats.byLocation} barClass="bg-accent" />
         <BreakdownCard title="Team Size by Manager" counts={stats.byManager} barClass="bg-accent-2" />
         <BreakdownCard
-          title={`Overtime — ${monthName} (hours)`}
+          title={`Overtime — ${cursorMonthLabel} (hours)`}
           counts={calendars.otHours}
           barClass="bg-accent-lavender"
         />
