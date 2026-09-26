@@ -37,11 +37,22 @@ app.use(cookieParser());
 // it must stay reachable while must_setup_2fa is true (that's the whole
 // point — you need /2fa/setup and /2fa/confirm to get past the gate), but
 // still requires a real password to already be set first.
+//
+// Both gates are scoped to "/api" specifically, not mounted bare — mounted
+// bare, they'd also intercept the static frontend build and the SPA
+// catch-all further below, so a flagged user hard-loading (or refreshing,
+// or opening a bookmark to) ANY page, including "/", got a raw JSON 403
+// instead of the app shell — RequireAuth.tsx never even got a chance to
+// render ForceChangePasswordPage/ForceSetup2FAPage in its place, since the
+// server never sent index.html at all. Scoping to "/api" lets the SPA
+// shell always load; the client-side gate in RequireAuth.tsx (which reads
+// the same must_change_password/must_setup_2fa flags from /api/auth/me)
+// is what actually shows the right page once it does.
 app.use(attachUser);
 app.use("/api/auth", authRouter);
-app.use(forcePasswordChangeGate);
+app.use("/api", forcePasswordChangeGate);
 app.use("/api/2fa", twoFactorRouter);
-app.use(force2faSetupGate);
+app.use("/api", force2faSetupGate);
 app.use("/api/users", usersRouter);
 app.use("/api/profiles", profilesRouter);
 app.use("/api/profiles", pdfRouter);

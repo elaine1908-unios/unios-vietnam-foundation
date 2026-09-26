@@ -86,19 +86,25 @@ being usable as a real session.
 ### Forced password change
 
 Every account created by someone else — including an admin-issued
-password reset — is flagged `must_change_password`. A single app-wide
-gate, `forcePasswordChangeGate` (`server/src/forcePasswordChangeGate.ts`),
-is mounted **after** `authRouter` and **before every other router**:
+password reset — is flagged `must_change_password`. A single gate,
+`forcePasswordChangeGate` (`server/src/forcePasswordChangeGate.ts`), is
+mounted at `/api`, **after** `authRouter` and **before every other API
+router**:
 ```
 app.use(attachUser);
 app.use("/api/auth", authRouter);       // sign-in, /me, change-password — always reachable
-app.use(forcePasswordChangeGate);       // 403s everything below until password is changed
+app.use("/api", forcePasswordChangeGate); // 403s every other /api/* route until password is changed
 app.use("/api/users", usersRouter);
 ...
 ```
 This is enforced by ordering, not a path-exemption list — anything under
 `/api/auth` is simply mounted before the gate, so there's no way to add a
-new router and forget to exempt it. The client mirrors this in
+new router and forget to exempt it. Scoped to `/api` specifically, not
+mounted bare: mounted bare, it would also intercept the static frontend
+build and the SPA catch-all further down the chain, so a flagged user
+hard-loading any page (including `/`) would get a raw JSON 403 instead of
+the app shell — a real bug this app shipped with briefly before it was
+caught. The client mirrors this in
 `RequireAuth.tsx` (the single wrapper every authenticated route passes
 through), rendering a forced change-password screen instead of the
 requested page.

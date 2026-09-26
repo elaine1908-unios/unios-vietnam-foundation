@@ -1,12 +1,17 @@
 import type { Request, Response, NextFunction } from "express";
 
-// Mounted globally, AFTER authRouter + forcePasswordChangeGate + the /2fa
+// Mounted at "/api", AFTER authRouter + forcePasswordChangeGate + the /2fa
 // router itself, and BEFORE every other router (see index.ts). That
 // ordering is what keeps sign-in, "set my password", and the 2FA setup
 // routes reachable while everything else 403s — same shape as
 // forcePasswordChangeGate.ts, just one step later since you have to fix
 // your password before setting up 2FA (a fresh account's temp password
-// isn't something to build a second factor on top of).
+// isn't something to build a second factor on top of). Scoped to "/api"
+// for the same reason forcePasswordChangeGate.ts is — mounted bare, it
+// would also block the static frontend build and the SPA catch-all,
+// leaving a flagged user stuck on a raw JSON 403 for any hard page load
+// instead of the app shell (which is what actually renders
+// ForceSetup2FAPage, via RequireAuth.tsx).
 //
 // Gates on `must_setup_2fa && !has_2fa` rather than the raw column: an
 // account that's had must_setup_2fa set (new account, password reset, or

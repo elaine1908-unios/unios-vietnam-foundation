@@ -1,10 +1,15 @@
 import type { Request, Response, NextFunction } from "express";
 
-// Mounted globally, AFTER authRouter and BEFORE every other router (see
+// Mounted at "/api", AFTER authRouter and BEFORE every other router (see
 // index.ts). That ordering alone is what keeps sign-in, "read my profile",
 // and "set my password" reachable while everything else 403s: those all
 // live under /api/auth, which sits earlier in the middleware chain and so
 // never reaches this gate at all — no path-exemption list to maintain here.
+// Scoped to "/api" specifically, not mounted bare — bare, it would also
+// intercept the static frontend build and the SPA catch-all, so a flagged
+// user hard-loading any page (including "/") got a raw JSON 403 instead of
+// the app shell, with RequireAuth.tsx (the client-side mirror of this same
+// check) never even getting a chance to render.
 //
 // App-level rather than per-route: a shared starter password is usually
 // public knowledge inside a team, so this has to block the whole API, not
