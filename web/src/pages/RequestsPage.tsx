@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import type { RequestRecord, RequestType } from "../lib/types";
 import { REQUEST_TYPE_LABELS } from "../lib/types";
-import { ALRequestForm, BTRequestForm, OTRequestForm } from "../components/RequestForms";
+import { ALRequestForm, BTRequestForm, OTRequestForm, RequestSubmittedModal } from "../components/RequestForms";
 
 const TABS: RequestType[] = ["AL", "OT", "BT"];
 
@@ -12,6 +12,7 @@ export function RequestsPage() {
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<RequestRecord | null>(null);
   const queryClient = useQueryClient();
 
   // Same query key My Requests uses, so it reflects a just-submitted
@@ -34,8 +35,9 @@ export function RequestsPage() {
     setError(null);
     try {
       const created = await api.post<RequestRecord>("/requests", { type: tab, ...payload });
-      await api.post(`/requests/${created.id}/submit`);
+      const result = await api.post<RequestRecord>(`/requests/${created.id}/submit`);
       await queryClient.invalidateQueries({ queryKey: ["requests", "mine"] });
+      setSubmitted(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong.");
     } finally {
@@ -75,6 +77,7 @@ export function RequestsPage() {
       {tab === "BT" && (
         <BTRequestForm saving={saving} submitting={submitting} error={error} onSaveDraft={saveDraft} onSubmit={submitNew} />
       )}
+      {submitted && <RequestSubmittedModal request={submitted} onAcknowledge={() => setSubmitted(null)} />}
     </div>
   );
 }

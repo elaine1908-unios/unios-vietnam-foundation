@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { api, ApiError } from "../lib/api";
-import { LEAVE_DURATIONS, LEAVE_TYPES, OT_LOCATIONS } from "../lib/types";
-import type { AlDetails, BtDetails, OtDetails } from "../lib/types";
+import { LEAVE_DURATIONS, LEAVE_TYPES, OT_LOCATIONS, REQUEST_TYPE_LABELS } from "../lib/types";
+import type { AlDetails, BtDetails, OtDetails, RequestRecord } from "../lib/types";
+import { requestPeriod, requestSummary } from "../lib/requestDisplay";
+import { employeeDisplayName } from "../lib/vietnamese";
 
 // Mirrors the same calculations in server/src/routes/requests.ts exactly —
 // duplicated here purely for an immediate live preview as the employee
@@ -194,6 +196,42 @@ export function ConfirmAlSubmitModal({
             {submitting ? "Submitting…" : "Confirm & Submit"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown once a submit actually succeeds (POST /:id/submit resolves) —
+// distinct from ConfirmAlSubmitModal above, which only gates Annual Leave
+// specifically and appears BEFORE the submit call. This one fires for
+// every type (AL/OT/BT alike) after the server has already accepted it, as
+// a receipt: a one-line summary (reusing the exact same requestPeriod/
+// requestSummary helpers the My Requests/Manage/Approvals tables use, so
+// it reads identically everywhere) plus an explicit acknowledgment the
+// employee has to click through rather than a passive toast, since HR
+// wants a deliberate "yes, this is right" rather than something easy to
+// miss. Shared between both submit entry points — a brand-new request
+// (RequestsPage.tsx) and resubmitting an existing draft
+// (RequestDetailPage.tsx) — so the two can't drift into different copy.
+export function RequestSubmittedModal({ request, onAcknowledge }: { request: RequestRecord; onAcknowledge: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-ink/50 flex items-center justify-center p-4 z-50">
+      <div className="card max-w-sm w-full flex flex-col gap-3">
+        <h2 className="font-display font-semibold text-lg">Request submitted</h2>
+        <p className="text-sm text-ink-muted">Please review the summary below.</p>
+        <div className="border border-border rounded-md p-3 text-sm flex flex-col gap-1">
+          <div className="font-medium">
+            {request.request_code ?? "(pending code)"} · {REQUEST_TYPE_LABELS[request.type]}
+          </div>
+          <div className="text-ink-muted">{requestPeriod(request)}</div>
+          <div className="text-ink-muted">{requestSummary(request)}</div>
+          {request.approver && (
+            <div className="text-ink-muted">Approver: {employeeDisplayName(request.approver)}</div>
+          )}
+        </div>
+        <button className="btn-primary self-end" type="button" onClick={onAcknowledge}>
+          I confirm this information is correct
+        </button>
       </div>
     </div>
   );

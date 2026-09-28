@@ -5,7 +5,7 @@ import { api, ApiError } from "../lib/api";
 import type { AlDetails, BtDetails, OtDetails, RequestRecord } from "../lib/types";
 import { REQUEST_TYPE_LABELS } from "../lib/types";
 import { employeeDisplayName } from "../lib/vietnamese";
-import { ALRequestForm, BTRequestForm, OTRequestForm, ConfirmAlSubmitModal, calcAlDays } from "../components/RequestForms";
+import { ALRequestForm, BTRequestForm, OTRequestForm, ConfirmAlSubmitModal, RequestSubmittedModal, calcAlDays } from "../components/RequestForms";
 import type { AlBalance } from "../components/RequestForms";
 import { StatusBadge, requestPeriod } from "../lib/requestDisplay";
 
@@ -99,6 +99,7 @@ export function RequestDetailPage() {
   const [alConfirmOpen, setAlConfirmOpen] = useState(false);
   const [alBalance, setAlBalance] = useState<AlBalance | null>(null);
   const [alBalanceError, setAlBalanceError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<RequestRecord | null>(null);
 
   const { data: r, isLoading, error } = useQuery({
     queryKey: ["requests", id],
@@ -131,9 +132,10 @@ export function RequestDetailPage() {
     setFormError(null);
     try {
       await api.patch(`/requests/${id}`, payload);
-      await api.post(`/requests/${id}/submit`);
+      const result = await api.post<RequestRecord>(`/requests/${id}/submit`);
       await refresh();
       setEditing(false);
+      setSubmitted(result);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Something went wrong.");
     } finally {
@@ -145,8 +147,9 @@ export function RequestDetailPage() {
     setBusy(true);
     setActionError(null);
     try {
-      await api.post(`/requests/${id}/submit`);
+      const result = await api.post<RequestRecord>(`/requests/${id}/submit`);
       await refresh();
+      setSubmitted(result);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Something went wrong.");
     } finally {
@@ -419,6 +422,7 @@ export function RequestDetailPage() {
           }}
         />
       )}
+      {submitted && <RequestSubmittedModal request={submitted} onAcknowledge={() => setSubmitted(null)} />}
     </div>
   );
 }
