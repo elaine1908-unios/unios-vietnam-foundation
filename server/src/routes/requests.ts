@@ -185,13 +185,28 @@ function calcBtDays(departureAt: string, returnAt: string): number {
 // "AL-2026-0001" — only generated on submit (see POST /:id/submit) so a
 // draft that's never submitted never consumes a sequence number. Mirrors
 // generateEmployeeCode's counting approach in routes/employees.ts.
+// Next-highest-number-used + 1, NOT a row count — a count silently breaks
+// the moment any coded request is ever deleted (see DELETE /:id): deleting
+// a non-last one leaves the count permanently lower than the highest
+// number actually assigned, so count-based generation keeps recomputing
+// and colliding with that same still-existing higher code forever (this is
+// exactly the real cause of a production "UNIQUE constraint failed:
+// requests.request_code" crash that transactionWithConflictRetry's
+// retries couldn't recover from either, since a deterministic collision
+// recomputes identically on every attempt — retries only help with a
+// genuine transient race, not a permanently wrong count). Scanning for the
+// actual max in use is immune to gaps from deletions.
 function generateRequestCode(type: RequestType): string {
   const year = new Date().getFullYear();
   const prefix = `${type}-${year}-`;
-  const count = (
-    db.prepare("SELECT COUNT(*) as n FROM requests WHERE request_code LIKE ?").get(`${prefix}%`) as { n: number }
-  ).n;
-  return `${prefix}${String(count + 1).padStart(4, "0")}`;
+  const rows = db.prepare("SELECT request_code FROM requests WHERE request_code LIKE ?").all(`${prefix}%`) as {
+    request_code: string;
+  }[];
+  const maxNum = rows.reduce((max, r) => {
+    const n = Number(r.request_code.slice(prefix.length));
+    return Number.isFinite(n) && n > max ? n : max;
+  }, 0);
+  return `${prefix}${String(maxNum + 1).padStart(4, "0")}`;
 }
 
 // Sum of days already committed against this employee's entitlement for the
