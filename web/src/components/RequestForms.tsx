@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { LEAVE_DURATIONS, LEAVE_TYPES, OT_LOCATIONS, REQUEST_TYPE_LABELS } from "../lib/types";
 import type { AlDetails, BtDetails, OtDetails, RequestRecord } from "../lib/types";
@@ -218,7 +219,13 @@ export function RequestSubmittedModal({ request, onAcknowledge }: { request: Req
     <div className="fixed inset-0 bg-ink/50 flex items-center justify-center p-4 z-50">
       <div className="card max-w-sm w-full flex flex-col gap-3">
         <h2 className="font-display font-semibold text-lg">Request submitted</h2>
-        <p className="text-sm text-ink-muted">Please review the summary below.</p>
+        <p className="text-sm text-ink-muted">
+          Your submission has been completed. Please go to{" "}
+          <Link to="/requests/mine" className="text-accent hover:underline" onClick={onAcknowledge}>
+            My Requests
+          </Link>{" "}
+          to check the current approval status.
+        </p>
         <div className="border border-border rounded-md p-3 text-sm flex flex-col gap-1">
           <div className="font-medium">
             {request.request_code ?? "(pending code)"} · {REQUEST_TYPE_LABELS[request.type]}
