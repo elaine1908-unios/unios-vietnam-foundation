@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, transaction } from "../db.js";
+import { db, transaction, transactionWithConflictRetry } from "../db.js";
 import { newId } from "../ids.js";
 import { requireAuth, requireCap } from "../middleware.js";
 import { logAudit, diffAndLog } from "../audit.js";
@@ -481,19 +481,18 @@ employeesRouter.post("/", requireCap("employee.create"), (req, res) => {
   }
   const id = newId();
   const values = fieldValues(FIELDS, input, roleDerivedFields(careerMapRoleId));
-  // Wrapped in a transaction (BEGIN IMMEDIATE — see db.ts) so
+  // Wrapped in transactionWithConflictRetry (see db.ts) so
   // generateEmployeeCode's "count existing codes, then claim the next one"
-  // can't race with a second concurrent create landing on the same code —
-  // the same class of bug that caused a real "UNIQUE constraint failed:
-  // requests.request_code" crash for generateRequestCode (see
+  // can't produce a duplicate under concurrent creates — same class of bug
+  // (and same fix) as generateRequestCode's real production crash (see
   // routes/requests.ts's POST /:id/submit).
-  transaction(() => {
+  transactionWithConflictRetry(() => {
     const employeeCode = generateEmployeeCode(input.first_name, input.last_name, input.commencement_date as string | null | undefined);
     db.prepare(
       `INSERT INTO employees (id, employee_code, ${FIELDS.join(", ")}, career_map_role_id, report_to_employee_id, is_offshore, created_by, updated_by) VALUES (?, ?, ${FIELDS.map(() => "?").join(", ")}, ?, ?, ?, ?, ?)`,
     ).run(id, employeeCode, ...values, careerMapRoleId, reportToId, input.is_offshore ? 1 : 0, req.user!.id, req.user!.id);
     logAudit("employee", id, "created", req.user!.id);
-  })();
+  }, "UNIQUE constraint failed: employees.employee_code");
   res.status(201).json(loadDetail(id));
 });
 

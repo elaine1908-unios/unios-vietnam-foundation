@@ -56,3 +56,33 @@ export function transaction<T extends unknown[], R>(fn: (...args: T) => R): (...
     }
   };
 }
+
+// A second, independent line of defense for "count existing rows, then
+// claim the next sequential code" patterns (generateRequestCode,
+// generateEmployeeCode), on top of transaction()'s BEGIN IMMEDIATE above.
+// BEGIN IMMEDIATE alone turned out not to be enough in production — the
+// exact same "UNIQUE constraint failed" crash it was meant to prevent
+// still happened on the live deployment (whatever the underlying cause —
+// unclear from here whether it's the storage layer not honoring SQLite's
+// locking the way local testing showed, multiple replicas, or something
+// else). Rather than depend on getting that guarantee right, this instead
+// tolerates the conflict: `fn` runs inside its own fresh transaction (so a
+// failed attempt is fully rolled back, nothing partially applied), and if
+// it fails specifically on the unique code column, it's retried — the
+// retry naturally recomputes a fresh code against post-conflict state,
+// since `fn` re-reads the current count itself rather than reusing a
+// stale value. Only retries on that specific conflict; any other error
+// (validation, a real FK issue, etc.) still surfaces immediately.
+export function transactionWithConflictRetry<R>(fn: () => R, conflictMessageIncludes: string, maxAttempts = 5): R {
+  const run = transaction(fn);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return run();
+    } catch (err) {
+      const isConflict = err instanceof Error && err.message.includes(conflictMessageIncludes);
+      if (!isConflict || attempt === maxAttempts) throw err;
+    }
+  }
+  // Unreachable — the loop above always either returns or throws.
+  throw new Error("transactionWithConflictRetry: exhausted attempts without returning or throwing.");
+}

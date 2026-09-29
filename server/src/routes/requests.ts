@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, transaction } from "../db.js";
+import { db, transaction, transactionWithConflictRetry } from "../db.js";
 import { newId } from "../ids.js";
 import { requireAuth, requireCap } from "../middleware.js";
 import { logAudit } from "../audit.js";
@@ -665,7 +665,12 @@ requestsRouter.post("/import", requireCap("request.import"), (req, res) => {
     return;
   }
   const importedIds: string[] = [];
-  const commit = transaction(() => {
+  // See transactionWithConflictRetry in db.ts — same "count then claim a
+  // code" race as POST /:id/submit. Resets importedIds at the top since a
+  // retried attempt re-runs this whole closure from scratch (the prior
+  // attempt was fully rolled back).
+  transactionWithConflictRetry(() => {
+    importedIds.length = 0;
     for (const r of results) {
       const id = newId();
       const code = generateRequestCode(type);
@@ -677,8 +682,7 @@ requestsRouter.post("/import", requireCap("request.import"), (req, res) => {
       logAudit("request", id, "imported", req.user!.id);
       importedIds.push(id);
     }
-  });
-  commit();
+  }, "UNIQUE constraint failed: requests.request_code");
   res.status(201).json({ imported: importedIds.length });
 });
 
@@ -780,20 +784,20 @@ requestsRouter.post("/:id/submit", (req, res) => {
   // Resubmitting after Return for Edit keeps the code it already has — a
   // request's reference number is assigned once, on its first-ever submit,
   // not reissued every time it goes needs_changes -> pending_approval again.
-  // Wrapped in a transaction (BEGIN IMMEDIATE — see db.ts) so
+  // Wrapped in transactionWithConflictRetry (see db.ts) so
   // generateRequestCode's "count existing codes, then claim the next one"
-  // can't race with another submission doing the same thing at the same
-  // moment and landing on the same code (this is exactly what produced a
-  // real "UNIQUE constraint failed: requests.request_code" crash under
-  // concurrent submissions).
-  transaction(() => {
+  // can't produce a duplicate under concurrent submissions — BEGIN
+  // IMMEDIATE alone (what transaction() provides) turned out not to fully
+  // prevent this in production, so a failed attempt here is retried with a
+  // freshly recomputed code instead of crashing the request.
+  transactionWithConflictRetry(() => {
     const code = existing.request_code ?? generateRequestCode(existing.type);
     db.prepare(
       `UPDATE requests SET status = 'pending_approval', request_code = ?, approver_id = ?, submitted_at = datetime('now'),
          updated_at = datetime('now') WHERE id = ?`,
     ).run(code, me.report_to_employee_id, existing.id);
     logAudit("request", existing.id, "submitted", req.user!.id);
-  })();
+  }, "UNIQUE constraint failed: requests.request_code");
   res.json(loadDetail(existing.id, me.id, isAdminOversight(req.user!)));
 });
 
