@@ -12,6 +12,16 @@ mkdirSync(dirname(dbPath), { recursive: true });
 export const db = new DatabaseSync(dbPath);
 db.exec("PRAGMA journal_mode = WAL");
 db.exec("PRAGMA foreign_keys = ON");
+// Without this, SQLite's default busy_timeout is 0 — a second concurrent
+// write (two people submitting/approving/deciding at once, which now
+// happens routinely with real usage) fails immediately with
+// SQLITE_BUSY/"database is locked" instead of waiting briefly for the
+// first write to finish. That surfaces to the user as a bare "Something
+// went wrong on the server." with no indication anything was actually
+// wrong with their request — a real request retried a moment later would
+// have gone through fine. 5s comfortably covers this app's write
+// transactions, which are all short (single-row updates, no long scans).
+db.exec("PRAGMA busy_timeout = 5000");
 
 runMigrations(db, join(__dirname, "migrations"));
 
