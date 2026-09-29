@@ -32,9 +32,20 @@ runMigrations(db, join(__dirname, "migrations"));
 
 // node:sqlite's DatabaseSync has no built-in .transaction() helper, so this
 // wraps a callback in BEGIN/COMMIT with rollback-on-throw.
+//
+// BEGIN IMMEDIATE, not plain BEGIN (which defers taking a lock until the
+// transaction's first write) — a plain BEGIN lets two concurrent
+// transactions both read the same "current count" before either commits,
+// then both try to write based on that same stale count. That's exactly
+// what generated a duplicate `requests.request_code` under real concurrent
+// submissions (a "check-then-write" race in generateRequestCode). BEGIN
+// IMMEDIATE takes the write lock up front, so a second transaction's own
+// BEGIN IMMEDIATE simply waits (via the busy_timeout above) for the first
+// to fully commit before it ever runs its own read — it can't observe
+// stale data mid-race the way a deferred transaction can.
 export function transaction<T extends unknown[], R>(fn: (...args: T) => R): (...args: T) => R {
   return (...args: T) => {
-    db.exec("BEGIN");
+    db.exec("BEGIN IMMEDIATE");
     try {
       const result = fn(...args);
       db.exec("COMMIT");

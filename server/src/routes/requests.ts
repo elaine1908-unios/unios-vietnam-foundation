@@ -780,12 +780,20 @@ requestsRouter.post("/:id/submit", (req, res) => {
   // Resubmitting after Return for Edit keeps the code it already has — a
   // request's reference number is assigned once, on its first-ever submit,
   // not reissued every time it goes needs_changes -> pending_approval again.
-  const code = existing.request_code ?? generateRequestCode(existing.type);
-  db.prepare(
-    `UPDATE requests SET status = 'pending_approval', request_code = ?, approver_id = ?, submitted_at = datetime('now'),
-       updated_at = datetime('now') WHERE id = ?`,
-  ).run(code, me.report_to_employee_id, existing.id);
-  logAudit("request", existing.id, "submitted", req.user!.id);
+  // Wrapped in a transaction (BEGIN IMMEDIATE — see db.ts) so
+  // generateRequestCode's "count existing codes, then claim the next one"
+  // can't race with another submission doing the same thing at the same
+  // moment and landing on the same code (this is exactly what produced a
+  // real "UNIQUE constraint failed: requests.request_code" crash under
+  // concurrent submissions).
+  transaction(() => {
+    const code = existing.request_code ?? generateRequestCode(existing.type);
+    db.prepare(
+      `UPDATE requests SET status = 'pending_approval', request_code = ?, approver_id = ?, submitted_at = datetime('now'),
+         updated_at = datetime('now') WHERE id = ?`,
+    ).run(code, me.report_to_employee_id, existing.id);
+    logAudit("request", existing.id, "submitted", req.user!.id);
+  })();
   res.json(loadDetail(existing.id, me.id, isAdminOversight(req.user!)));
 });
 
